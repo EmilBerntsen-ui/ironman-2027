@@ -1,0 +1,40 @@
+[
+  {
+    "resource_state": 2,
+    "id": 11111111108,
+    "sport_type": "Run",
+    "type": "Run",
+    "start_date": "2026-11-08T17:00:00Z",
+    "start_date_local": "2026-11-08T17:00:00",
+    "timezone": "(GMT+01:00) Europe/Copenhagen",
+    "utc_offset": 3600,
+    "elapsed_time": 3000,
+    "moving_time": 2900,
+    "distance": 8000,
+    "has_heartrate": true,
+    "average_heartrate": 150,
+    "name": "HEMMELIG-AKTIVITET",
+    "description": "HEMMELIG-BESKRIVELSE",
+    "athlete": {
+      "id": 99887766,
+      "resource_state": 1
+    },
+    "map": {
+      "id": "a11111111108",
+      "summary_polyline": "POLYLINE-XYZ",
+      "resource_state": 2
+    },
+    "start_latlng": [
+      55.6761,
+      12.5683
+    ],
+    "end_latlng": [
+      55.6801,
+      12.5701
+    ],
+    "location_city": "HEMMELIG-BY",
+    "location_country": "Denmark",
+    "gear_id": "b99887766",
+    "device_name": "HEMMELIG-ENHED"
+  }
+]

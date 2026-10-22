@@ -1,0 +1,264 @@
+[
+  {
+    "resource_state": 2,
+    "id": 11111111101,
+    "sport_type": "VirtualRide",
+    "type": "VirtualRide",
+    "start_date": "2026-11-06T11:30:00Z",
+    "start_date_local": "2026-11-06T11:30:00",
+    "timezone": "(GMT+01:00) Europe/Copenhagen",
+    "utc_offset": 3600,
+    "elapsed_time": 3720,
+    "moving_time": 3600,
+    "distance": 31500.2,
+    "has_heartrate": true,
+    "average_heartrate": 141.6,
+    "name": "HEMMELIG-AKTIVITET",
+    "description": "HEMMELIG-BESKRIVELSE",
+    "athlete": {
+      "id": 99887766,
+      "resource_state": 1
+    },
+    "map": {
+      "id": "a11111111101",
+      "summary_polyline": "POLYLINE-XYZ",
+      "resource_state": 2
+    },
+    "start_latlng": [
+      55.6761,
+      12.5683
+    ],
+    "end_latlng": [
+      55.6801,
+      12.5701
+    ],
+    "location_city": "HEMMELIG-BY",
+    "location_country": "Denmark",
+    "gear_id": "b99887766",
+    "device_name": "HEMMELIG-ENHED"
+  },
+  {
+    "resource_state": 2,
+    "id": 11111111102,
+    "sport_type": "Ride",
+    "type": "Ride",
+    "start_date": "2026-11-07T08:00:00Z",
+    "start_date_local": "2026-11-07T08:00:00",
+    "timezone": "(GMT+01:00) Europe/Copenhagen",
+    "utc_offset": 3600,
+    "elapsed_time": 5700,
+    "moving_time": 5400,
+    "distance": 52300.4,
+    "has_heartrate": true,
+    "average_heartrate": 128,
+    "name": "HEMMELIG-AKTIVITET",
+    "description": "HEMMELIG-BESKRIVELSE",
+    "athlete": {
+      "id": 99887766,
+      "resource_state": 1
+    },
+    "map": {
+      "id": "a11111111102",
+      "summary_polyline": "POLYLINE-XYZ",
+      "resource_state": 2
+    },
+    "start_latlng": [
+      55.6761,
+      12.5683
+    ],
+    "end_latlng": [
+      55.6801,
+      12.5701
+    ],
+    "location_city": "HEMMELIG-BY",
+    "location_country": "Denmark",
+    "gear_id": "b99887766",
+    "device_name": "HEMMELIG-ENHED"
+  },
+  {
+    "resource_state": 2,
+    "id": 11111111103,
+    "sport_type": "Run",
+    "type": "Run",
+    "start_date": "2026-11-07T10:05:00Z",
+    "start_date_local": "2026-11-07T10:05:00",
+    "timezone": "(GMT+01:00) Europe/Copenhagen",
+    "utc_offset": 3600,
+    "elapsed_time": 640,
+    "moving_time": 600,
+    "distance": 2100,
+    "has_heartrate": false,
+    "name": "HEMMELIG-AKTIVITET",
+    "description": "HEMMELIG-BESKRIVELSE",
+    "athlete": {
+      "id": 99887766,
+      "resource_state": 1
+    },
+    "map": {
+      "id": "a11111111103",
+      "summary_polyline": "POLYLINE-XYZ",
+      "resource_state": 2
+    },
+    "start_latlng": [
+      55.6761,
+      12.5683
+    ],
+    "end_latlng": [
+      55.6801,
+      12.5701
+    ],
+    "location_city": "HEMMELIG-BY",
+    "location_country": "Denmark",
+    "gear_id": "b99887766",
+    "device_name": "HEMMELIG-ENHED"
+  },
+  {
+    "resource_state": 2,
+    "id": 11111111104,
+    "sport_type": "Walk",
+    "type": "Walk",
+    "start_date": "2026-11-08T09:00:00Z",
+    "start_date_local": "2026-11-08T09:00:00",
+    "timezone": "(GMT+01:00) Europe/Copenhagen",
+    "utc_offset": 3600,
+    "elapsed_time": 2400,
+    "moving_time": 2300,
+    "distance": 3100,
+    "has_heartrate": false,
+    "name": "HEMMELIG-AKTIVITET",
+    "description": "HEMMELIG-BESKRIVELSE",
+    "athlete": {
+      "id": 99887766,
+      "resource_state": 1
+    },
+    "map": {
+      "id": "a11111111104",
+      "summary_polyline": "POLYLINE-XYZ",
+      "resource_state": 2
+    },
+    "start_latlng": [
+      55.6761,
+      12.5683
+    ],
+    "end_latlng": [
+      55.6801,
+      12.5701
+    ],
+    "location_city": "HEMMELIG-BY",
+    "location_country": "Denmark",
+    "gear_id": "b99887766",
+    "device_name": "HEMMELIG-ENHED"
+  },
+  {
+    "resource_state": 2,
+    "id": 11111111105,
+    "sport_type": "Swim",
+    "type": "Swim",
+    "start_date": "2026-11-04T16:10:00Z",
+    "start_date_local": "2026-11-04T16:10:00",
+    "timezone": "(GMT+01:00) Europe/Copenhagen",
+    "utc_offset": 3600,
+    "elapsed_time": 2400,
+    "moving_time": 2100,
+    "distance": 1800,
+    "has_heartrate": false,
+    "name": "HEMMELIG-AKTIVITET",
+    "description": "HEMMELIG-BESKRIVELSE",
+    "athlete": {
+      "id": 99887766,
+      "resource_state": 1
+    },
+    "map": {
+      "id": "a11111111105",
+      "summary_polyline": "POLYLINE-XYZ",
+      "resource_state": 2
+    },
+    "start_latlng": [
+      55.6761,
+      12.5683
+    ],
+    "end_latlng": [
+      55.6801,
+      12.5701
+    ],
+    "location_city": "HEMMELIG-BY",
+    "location_country": "Denmark",
+    "gear_id": "b99887766",
+    "device_name": "HEMMELIG-ENHED"
+  },
+  {
+    "resource_state": 2,
+    "id": 11111111106,
+    "sport_type": "WeightTraining",
+    "type": "WeightTraining",
+    "start_date": "2026-11-03T16:00:00Z",
+    "start_date_local": "2026-11-03T16:00:00",
+    "timezone": "(GMT+01:00) Europe/Copenhagen",
+    "utc_offset": 3600,
+    "elapsed_time": 2400,
+    "moving_time": 2300,
+    "has_heartrate": true,
+    "average_heartrate": 104.4,
+    "name": "HEMMELIG-AKTIVITET",
+    "description": "HEMMELIG-BESKRIVELSE",
+    "athlete": {
+      "id": 99887766,
+      "resource_state": 1
+    },
+    "map": {
+      "id": "a11111111106",
+      "summary_polyline": "POLYLINE-XYZ",
+      "resource_state": 2
+    },
+    "start_latlng": [
+      55.6761,
+      12.5683
+    ],
+    "end_latlng": [
+      55.6801,
+      12.5701
+    ],
+    "location_city": "HEMMELIG-BY",
+    "location_country": "Denmark",
+    "gear_id": "b99887766",
+    "device_name": "HEMMELIG-ENHED"
+  },
+  {
+    "resource_state": 2,
+    "id": 11111111107,
+    "sport_type": "Run",
+    "type": "Run",
+    "start_date": "2026-11-01T08:00:00Z",
+    "start_date_local": "2026-11-01T08:00:00",
+    "timezone": "(GMT+01:00) Europe/Copenhagen",
+    "utc_offset": 3600,
+    "elapsed_time": 3100,
+    "moving_time": 3000,
+    "distance": 9100.7,
+    "has_heartrate": true,
+    "average_heartrate": 149.2,
+    "name": "HEMMELIG-AKTIVITET",
+    "description": "HEMMELIG-BESKRIVELSE",
+    "athlete": {
+      "id": 99887766,
+      "resource_state": 1
+    },
+    "map": {
+      "id": "a11111111107",
+      "summary_polyline": "POLYLINE-XYZ",
+      "resource_state": 2
+    },
+    "start_latlng": [
+      55.6761,
+      12.5683
+    ],
+    "end_latlng": [
+      55.6801,
+      12.5701
+    ],
+    "location_city": "HEMMELIG-BY",
+    "location_country": "Denmark",
+    "gear_id": "b99887766",
+    "device_name": "HEMMELIG-ENHED"
+  }
+]
