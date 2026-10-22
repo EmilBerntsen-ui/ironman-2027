@@ -1,0 +1,120 @@
+name: pages
+
+# Bygger og udgiver sitet på GitHub Pages, inkl. det hemmelige kalenderfeed (docs/architecture.md §5).
+# Ingen pull_request-trigger: secrets må aldrig være tilgængelige for kode fra forks.
+# Secrets: CAL_TOKEN (påkrævet), GIST_ID + GIST_READ_TOKEN (begge skal sættes for ✅-mærkerne; mangler en af dem, advarer
+#          hentetrinnet, og kalenderen bygges uden mærker, men udrulningen fejler ikke),
+#          CAL_SCHEDULE (valgfri: JSON med starttider; uden den bliver pas heldagsbegivenheder).
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 2 * * *' # 04:17 CEST / 03:17 CET; :17 undgår forsinkelser ved hele timer
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  TZ: Europe/Copenhagen
+
+defaults:
+  run:
+    shell: bash # giver -eo pipefail
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write # actions/configure-pages
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Test
+        run: node --test
+
+      - name: Fetch progress (secret gist)
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GIST_READ_TOKEN: ${{ secrets.GIST_READ_TOKEN }}
+        run: node scripts/fetch-progress.mjs --out "$RUNNER_TEMP/progress.json"
+
+      - name: Build site
+        env:
+          CAL_TOKEN: ${{ secrets.CAL_TOKEN }}
+          CAL_SCHEDULE: ${{ secrets.CAL_SCHEDULE }}
+          PROGRESS_FILE: ${{ runner.temp }}/progress.json
+        run: node build.mjs --target=site
+
+      # Hemmeligheder og private ord må kun findes i kalenderfilen under cal/ (den ligger bag den hemmelige sti).
+      # Mønstrene er skrevet med klammer, så selve denne fil ikke indeholder ordene.
+      - name: Leak guard
+        env:
+          CAL_TOKEN: ${{ secrets.CAL_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+        run: |
+          test -d dist/site || { echo "::error::dist/site mangler"; exit 1; }
+          fail=0
+          for name in CAL_TOKEN GIST_ID; do
+            value="${!name}"
+            [ -n "$value" ] || continue
+            if grep -rlF --exclude-dir=cal -- "$value" dist/site; then
+              echo "::error::$name findes uden for cal/ (filer ovenfor)"
+              fail=1
+            fi
+          done
+          if grep -rIliE --exclude-dir=cal -e '\b[d]tu\b' -e '[s]ymphogen' dist/site; then
+            echo "::error::private ord findes uden for cal/ (filer ovenfor)"
+            fail=1
+          fi
+          exit "$fail"
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist/site
+          retention-days: 1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v5
+
+  cleanup:
+    needs: [build, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Delete Pages artifact (offentlige repos' artifacts kan hentes af alle, og det indeholder cal/<CAL_TOKEN>)
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[].id' \
+            | xargs -r -I{} gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/{}"
+
+      - name: Keep cron alive (offentlige repos slår schedule fra efter 60 dages inaktivitet)
+        if: github.event_name == 'schedule'
+        run: gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/enable"

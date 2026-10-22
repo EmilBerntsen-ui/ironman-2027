@@ -1,0 +1,86 @@
+<main class="wrap" lang="da">
+  <header class="bib">
+    <div>
+      <div class="eyebrow">IRONMAN Copenhagen · 22.08.2027</div>
+      <h1>43 uger<br>til målstregen</h1>
+      <div class="dist"><b>3,8</b> km svøm · <b>180</b> km cykel · <b>42,2</b> km løb</div>
+    </div>
+    <div class="count">
+      <div class="big num" id="days">–</div>
+      <div class="lbl">dage til søndag 22. august 2027</div>
+      <div class="sub" id="tuneup"></div>
+    </div>
+    <div class="progress">
+      <div class="bar" aria-hidden="true"><i id="pbar"></i></div>
+      <span class="num" id="ptext">0 af 0 pas gennemført</span>
+      <button type="button" class="savemode" id="savemode" title="Synkronisering og eksport">Forbinder…</button>
+    </div>
+  </header>
+
+  <section aria-labelledby="calTitle">
+    <div class="sec-head">
+      <h2 id="calTitle">Kalender</h2>
+      <div class="cal-nav">
+        <button class="btn icon only-phone" id="prevWk" aria-label="Forrige uge">‹</button>
+        <button class="btn" id="todayBtn">I dag</button>
+        <button class="btn icon only-phone" id="nextWk" aria-label="Næste uge">›</button>
+      </div>
+    </div>
+    <div class="legend" style="margin-bottom:12px">
+      <span style="--c: var(--swim)">Svøm</span><span style="--c: var(--bike)">Cykel</span><span style="--c: var(--run)">Løb</span><span style="--c: var(--str)">Styrke</span><span style="--c: var(--race)">Konkurrence</span>
+      <span style="--c: var(--ok)">Gennemført</span><span style="--c: var(--warn)">Varighed &gt;20 % skævt</span><span style="--c: var(--miss)">Ikke gennemført</span>
+    </div>
+    <div class="gscroll" id="grid"></div>
+    <div class="agenda" id="agenda" aria-live="polite"></div>
+  </section>
+
+  <section aria-labelledby="perfTitle">
+    <div class="sec-head">
+      <h2 id="perfTitle">Præstation</h2>
+      <div class="legend">
+        <span class="ln" style="--c: var(--ctl)">Fitness (CTL)</span><span class="ln" style="--c: var(--atl)">Træthed (ATL)</span><span class="ln" style="--c: var(--tsb)">Friskhed (TSB)</span><span class="ln" style="--c: var(--ok)">Fitness, faktisk</span>
+      </div>
+    </div>
+    <div class="perf-box" id="perf">
+      <div id="pmc"></div>
+      <div id="bars"></div>
+      <div class="tip" id="tip"></div>
+    </div>
+    <p class="perf-cap" style="margin-top:8px">Planlagt belastning ud fra estimeret TSS (minutter × intensitet² × 100/60). Start-CTL er antaget 25. Den grønne linje regnes ud fra dine afkrydsede pas (faktiske minutter, hvis du har skrevet dem). Klik på en søjle for at hoppe til ugen.</p>
+  </section>
+
+  <details class="guide-wrap">
+    <summary>Guide: zoner, regler og skema</summary>
+    <div class="guide">
+      <section>
+        <h3>Zoner</h3>
+        <table class="zones">
+          <tr><td>Z1–Z2</td><td>Snakketempo. Løb under 89 % af tærskelpuls. Cykel 56–75 % FTP</td></tr>
+          <tr><td>IM-watt</td><td>65–75 % FTP</td></tr>
+          <tr><td>Sweet spot</td><td>88–93 % FTP</td></tr>
+          <tr><td>Tærskel</td><td>95–105 % FTP / tærskelpuls</td></tr>
+          <tr><td>Z4</td><td>Hårdt, kun korte ord</td></tr>
+          <tr><td>CSS</td><td>Din fart fra svømmetesten</td></tr>
+        </table>
+      </section>
+      <section>
+        <h3>Regler</h3>
+        <ul>
+          <li><b>80/20:</b> kun intervaldagene er hårde.</li>
+          <li><b>Glemt pas:</b> spring det over, indhent det ikke.</li>
+          <li><b>Syg eller skadet:</b> stop, og start med en let uge.</li>
+          <li><b>Lette uger</b> er dér, du bliver stærkere.</li>
+          <li><b>10-minutters-reglen</b> på dårlige dage.</li>
+        </ul>
+      </section>
+      <section>
+        <h3>Dit skema</h3>
+        <p>Efterår: studiet fylder man, tir, tor og ons, arbejdet fre (spinner og træningsrum). Derfor ligger pas om morgenen man/tir/tor og om eftermiddagen ons. <b>Forårets skema kendes ikke endnu</b>: flyt dagene, når det ligger fast, men læg aldrig to hårde dage efter hinanden.</p>
+      </section>
+    </div>
+  </details>
+
+  <p class="foot">Løbsdatoerne er tjekket i oktober 2026: IRONMAN Copenhagen søndag 22. august 2027 og Køge Jernmand (mellemdistance, DM) søndag 13. juni 2027. Studiets eksamensuger (uge 7–8 og 30–31) er stadig antaget. Til 10 km-løbet (uge 14) og halvmaratonen (uge 26) skal du selv finde et lokalt løb. Det, du logger, gemmes på siden, så du kan se det fra telefon og computer.</p>
+</main>
+
+<dialog class="sheet" id="sheet" lang="da" aria-labelledby="shTitle"><div class="sh" id="sh"></div></dialog>

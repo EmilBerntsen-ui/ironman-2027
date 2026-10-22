@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+.playwright-mcp/
+*progress*.json
+!test/fixtures/*.json
+# Private starttider til kalenderen (må aldrig i repoet)
+cal-schedule.local.json
+# Byggeoutput (CI bygger det; dist/artifact/index.html bygges lokalt til udgivelse)
+dist/
+# Agent-worktrees og lokal Claude-konfiguration
+.claude/

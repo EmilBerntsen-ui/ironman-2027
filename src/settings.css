@@ -1,0 +1,40 @@
+/* owned by 2b: synk-dialogen og statusknappen i headeren. Genbruger .sheet/.sh/.field/.btn fra styles.css (som er frosset). */
+
+/* Statuslinjen i headeren er en knap, der åbner synk-dialogen */
+button.savemode { background: none; border: 0; border-radius: 4px; padding: 6px 2px; min-height: 32px; font: inherit; font-size: 13px; color: var(--muted);
+  cursor: pointer; text-align: left; text-decoration: underline dotted; text-underline-offset: 3px; }
+button.savemode:hover { color: var(--ink); }
+button.savemode[data-state="auth"], button.savemode[data-state="error"] { color: var(--miss); }
+
+dialog.settings .sh { --c: var(--accent); gap: 14px; }
+dialog.settings section { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+dialog.settings h4 { margin: 0; font-family: var(--display); font-size: 20px; text-transform: uppercase; letter-spacing: .01em; }
+dialog.settings p { margin: 0; font-size: 14px; }
+dialog.settings a { color: var(--ink); text-underline-offset: 2px; }
+dialog.settings .hint { color: var(--muted); font-size: 13px; }
+dialog.settings .hint:empty { display: none; }
+dialog.settings .bad { color: var(--miss); }
+dialog.settings .set-status { font-weight: 600; }
+dialog.settings .set-status[data-state="auth"], dialog.settings .set-status[data-state="error"] { color: var(--miss); }
+dialog.settings .steps { margin: 0; padding-left: 18px; font-size: 14px; display: flex; flex-direction: column; gap: 2px; }
+dialog.settings code { font-family: var(--mono); font-size: 12.5px; background: var(--sunk); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+dialog.settings code.sel { user-select: all; display: inline-block; }
+dialog.settings .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0; font-size: 14px; }
+dialog.settings .facts dt { color: var(--muted); }
+dialog.settings .facts dd { margin: 0; }
+dialog.settings details { font-size: 14px; }
+dialog.settings summary { cursor: pointer; color: var(--muted); min-height: 28px; }
+dialog.settings .field input[type="password"], dialog.settings .field input[type="text"] { font-family: var(--mono); font-size: 14px; }
+dialog.settings textarea.mono { width: 100%; font-family: var(--mono); font-size: 12.5px; line-height: 1.4; min-height: 0; white-space: pre; overflow: auto; }
+dialog.settings input[type="file"] { font: inherit; font-size: 13px; max-width: 100%; }
+dialog.settings .xfer[hidden] { display: none; }
+dialog.settings .sh-actions.left { justify-content: flex-start; flex-wrap: wrap; }
+dialog.settings .sh-actions .btn { display: inline-flex; align-items: center; text-decoration: none; color: var(--ink); }
+dialog.settings .btn.primary { color: var(--bg); }
+dialog.settings .btn.danger { border-color: var(--miss); color: var(--miss); }
+dialog.settings .danger-zone { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+dialog.settings label.chkrow.small { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; min-height: 32px; }
+dialog.settings label.chkrow input { width: 20px; height: 20px; accent-color: var(--miss); }
+dialog.settings .msg { font-size: 13px; color: var(--muted); min-height: 1em; }
+dialog.settings .msg.bad { color: var(--miss); }
+dialog.settings .ver { color: var(--muted); font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; border-top: 1px solid var(--line); padding-top: 10px; }

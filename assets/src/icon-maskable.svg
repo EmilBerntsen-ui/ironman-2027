@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Kilde til assets/icons/icon-maskable-512.png. Samme motiv som icons/icon.svg, men skaleret til 80 % omkring midten, så det ligger
+       trygt i det maskérbare sikre område (en cirkel med 80 % af bredden som diameter), uanset om telefonen maskerer til cirkel eller afrundet firkant.
+       Baggrunden dækker hele fladen (maskable-ikoner må ikke have gennemsigtighed).
+       Opret PNG'en (librsvg; giver opak 8-bit RGB som de øvrige ikoner):
+         rsvg-convert -w 512 -h 512 assets/src/icon-maskable.svg -o assets/icons/icon-maskable-512.png -->
+  <rect width="512" height="512" fill="#14201E"/>
+  <g fill="#D9381E" transform="translate(256 256) scale(0.8) translate(-256 -256)">
+    <rect x="111" y="136" width="48" height="240"/>
+    <rect x="185" y="136" width="48" height="240"/>
+    <rect x="353" y="136" width="48" height="240"/>
+    <polygon points="185,136 237,136 317,376 265,376"/>
+    <polygon points="401,136 349,136 269,376 321,376"/>
+  </g>
+</svg>

@@ -1,0 +1,12 @@
+{
+  "name": "ironman-2027",
+  "private": true,
+  "type": "module",
+  "description": "Træningskalender til IRONMAN Copenhagen 2027 + .ics-eksport",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:site": "node build.mjs --target=site",
+    "build:artifact": "node build.mjs --target=artifact",
+    "test": "node --test"
+  }
+}
