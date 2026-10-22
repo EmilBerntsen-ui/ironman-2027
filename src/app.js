@@ -178,6 +178,16 @@ function setEntry(key, val) {
 
 // ---- Detaljevisning ----
 const sheet = $('sheet');
+const STRAVA_ID = /^\d{1,20}$/;
+// Importeret fra Strava: én linje under faktaboksene (docs/strava.md §5) og et link til den første aktivitet. Kun tal og esc(), aldrig rå tekst.
+function stravaHtml(e) {
+  const parts = ['Fra Strava'];
+  if (Number.isInteger(e.dist) && e.dist > 0) parts.push(`${(e.dist / 1000).toLocaleString('da-DK', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`);
+  if (Number.isInteger(e.hr)) parts.push(`⌀ ${e.hr} bpm`);
+  const id = typeof e.extId === 'string' ? e.extId.split(',')[0] : '';
+  const link = STRAVA_ID.test(id) ? ` · <a href="https://www.strava.com/activities/${id}" target="_blank" rel="noopener noreferrer">Se på Strava</a>` : '';
+  return `<p class="desc sh-strava">${parts.map(esc).join(' · ')}${link}</p>`;
+}
 let openKey = null, rpe = null;
 function openSheet(key) {
   const k = byKey[key]; if (!k) return;
@@ -197,7 +207,7 @@ function openSheet(key) {
   const sh = $('sh');
   sh.className = `sh c-${s.s}`;
   sh.innerHTML = `<div class="sh-top"><div><div class="sh-sport">${SPORT[s.s]}</div><h3 id="shTitle">${esc(s.t)}</h3><div class="when">${DAYS_LONG[di]} ${fmt(date)} ${date.getFullYear()} · Uge ${w.n} · ${PH[w.ph].name}</div></div><button class="x" id="fClose" aria-label="Luk">×</button></div>
-    <p class="desc">${esc(s.d)}</p>${facts}${form}`;
+    <p class="desc">${esc(s.d)}</p>${facts}${e && e.src === 'strava' ? stravaHtml(e) : ''}${form}`;
   if (!sheet.open) sheet.showModal();
 }
 sheet.addEventListener('click', ev => {
@@ -222,6 +232,12 @@ sheet.addEventListener('submit', ev => {
   if (min !== null) val.min = min;
   if (rpe) val.rpe = rpe;
   if (note) val.note = note;
+  if (prev && prev.src === 'strava') { // en redigeret Strava-post bliver ved med at høre til Strava; brugerens min/RPE/note vinder
+    val.src = 'strava';
+    if (prev.extId) val.extId = prev.extId;
+    if (prev.dist != null) val.dist = prev.dist;
+    if (prev.hr != null) val.hr = prev.hr;
+  }
   setEntry(openKey, val); sheet.close();
 });
 sheet.addEventListener('close', () => { openKey = null; });

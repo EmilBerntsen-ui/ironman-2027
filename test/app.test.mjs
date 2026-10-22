@@ -172,3 +172,72 @@ test('søjlerne har tilgængelige navne, der er identiske med den synlige toolti
     assert.match(label, new RegExp(`^Uge ${+wk + 1}: \\d+,\\d timer, \\S`));
   }
 });
+
+// ---- Strava-pas i detaljevisningen (docs/strava.md §5) ----
+
+const STRAVA_ENTRY = { done: true, updatedAt: '2026-11-06T12:35:00.000Z', dev: 'strava', at: '2026-11-06T11:30:00.000Z', min: 62, src: 'strava', extId: '12345678901', sig: 'bike:Cykel med intervaller', dist: 10234, hr: 148 };
+const openSheetOf = (app, key) => app.doc.fire('click', { target: { closest: sel => (sel === '[data-open]' ? { dataset: { open: key } } : null) } });
+const appWith = entry => loadApp({ storage: memoryStorage({ 'im2027-progress-v2': JSON.stringify({ v: 2, weeks: { u02: { '4-0': entry } } }) }) });
+
+test('Strava-pas: arket viser "Fra Strava · 10,2 km · ⌀ 148 bpm" og et sikkert link til aktiviteten', () => {
+  const app = appWith(STRAVA_ENTRY);
+  openSheetOf(app, 'u02-4-0');
+  const html = app.$('sh').innerHTML;
+  assert.match(html, /<h3 id="shTitle">Cykel med intervaller<\/h3>/);
+  assert.match(html, /<p class="desc sh-strava">Fra Strava · 10,2 km · ⌀ 148 bpm · <a href="https:\/\/www\.strava\.com\/activities\/12345678901" target="_blank" rel="noopener noreferrer">Se på Strava<\/a><\/p>/);
+  assert.ok(html.indexOf('sh-facts') < html.indexOf('sh-strava') && html.indexOf('sh-strava') < html.indexOf('<form'), 'under faktaboksene, over formularen');
+});
+
+test('Strava-pas: delvis data og ugyldigt id giver aldrig et link eller rå tekst; flere id\'er (race) linker til det første', () => {
+  const only = entry => { const app = appWith(entry); openSheetOf(app, 'u02-4-0'); return app.$('sh').innerHTML; };
+  assert.match(only({ ...STRAVA_ENTRY, hr: undefined }), /Fra Strava · 10,2 km · <a /);
+  assert.match(only({ ...STRAVA_ENTRY, dist: undefined, hr: undefined }), /<p class="desc sh-strava">Fra Strava · <a /);
+  assert.doesNotMatch(only({ ...STRAVA_ENTRY, dist: 0 }), /0,0 km/);
+  assert.match(only({ ...STRAVA_ENTRY, extId: '111,222,333' }), /activities\/111"/);
+  for (const bad of ['"><img src=x onerror=alert(1)>', 'abc', '../1', '1'.repeat(21), '']) {
+    const html = only({ ...STRAVA_ENTRY, extId: bad });
+    assert.doesNotMatch(html, /<a /, JSON.stringify(bad));
+    assert.ok(!html.includes('onerror'), JSON.stringify(bad));
+    assert.match(html, /Fra Strava/);
+  }
+  const manual = only({ done: true, updatedAt: STRAVA_ENTRY.updatedAt, min: 62 });
+  assert.doesNotMatch(manual, /Strava/);
+  assert.doesNotMatch(only({ ...STRAVA_ENTRY, src: 'manual' }), /Strava/);
+});
+
+test('Strava-pas: gem i arket bevarer src, extId, dist og hr, og brugerens min/RPE/note vinder', () => {
+  const app = appWith(STRAVA_ENTRY);
+  openSheetOf(app, 'u02-4-0');
+  app.$('fMin').value = '50';
+  app.$('fNote').value = 'Fin tur';
+  app.$('fDone').checked = true;
+  app.$('sheet').dispatch('submit');
+  const saved = JSON.parse(app.storage.getItem('im2027-progress-v2')).weeks.u02['4-0'];
+  assert.equal(saved.done, true);
+  assert.equal(saved.min, 50);
+  assert.equal(saved.note, 'Fin tur');
+  assert.equal(saved.src, 'strava');
+  assert.equal(saved.extId, '12345678901');
+  assert.equal(saved.dist, 10234);
+  assert.equal(saved.hr, 148);
+  assert.equal(saved.at, STRAVA_ENTRY.at, 'første gennemførelse bevares');
+  assert.ok(saved.updatedAt > STRAVA_ENTRY.updatedAt, 'redigeringen slår Strava-posten');
+});
+
+test('manuelt pas får ikke Strava-felter ved redigering, og fjernes afkrydsningen, bliver det en gravsten uden detaljer', () => {
+  const manual = { done: true, updatedAt: '2026-11-06T12:35:00.000Z', min: 62 };
+  const app = appWith(manual);
+  openSheetOf(app, 'u02-4-0');
+  app.$('fDone').checked = true;
+  app.$('sheet').dispatch('submit');
+  const saved = JSON.parse(app.storage.getItem('im2027-progress-v2')).weeks.u02['4-0'];
+  for (const k of ['src', 'extId', 'dist', 'hr']) assert.ok(!(k in saved), k);
+
+  const s = appWith(STRAVA_ENTRY);
+  openSheetOf(s, 'u02-4-0');
+  s.$('fDone').checked = false;
+  s.$('sheet').dispatch('submit');
+  const tomb = JSON.parse(s.storage.getItem('im2027-progress-v2')).weeks.u02['4-0'];
+  assert.equal(tomb.done, false);
+  for (const k of ['src', 'extId', 'dist', 'hr', 'min']) assert.ok(!(k in tomb), k);
+});

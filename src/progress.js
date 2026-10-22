@@ -4,7 +4,8 @@
 // ingen `export { … }`. Se docs/architecture.md §3.
 
 /** @typedef {{ done: boolean, updatedAt: string, dev?: string, at?: string, min?: number, rpe?: number,
- *              note?: string, src?: 'manual'|'strava', extId?: string, sig?: string }} Entry */
+ *              note?: string, src?: 'manual'|'strava', extId?: string, sig?: string,
+ *              dist?: number, hr?: number }} Entry   dist = meter (Strava), hr = gennemsnitspuls i slag/min (Strava) */
 /** @typedef {Record<string, Entry>} Week            sessionKey → Entry */
 /** @typedef {Record<string, Week>} Progress         weekId → Week */
 
@@ -19,7 +20,7 @@ const SESSION_KEY_RE = /^[0-6]-\d{1,2}$/;
 const WEEK_FILE_RE = /^(u\d{2})\.json$/;
 const UNKNOWN_KEY_RE = /^[A-Za-z][\w-]{0,39}$/;
 const MAX_MS = Date.parse('9999-12-31T23:59:59.999Z');
-const KNOWN = new Set(['done', 'updatedAt', 'dev', 'at', 'min', 'rpe', 'note', 'src', 'extId', 'sig']);
+const KNOWN = new Set(['done', 'updatedAt', 'dev', 'at', 'min', 'rpe', 'note', 'src', 'extId', 'sig', 'dist', 'hr']);
 
 const isObj = v => typeof v === 'object' && v !== null && !Array.isArray(v);
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -64,6 +65,8 @@ export function normalizeEntry(raw) {
   if (raw.src === 'manual' || raw.src === 'strava') e.src = raw.src;
   const extId = cleanStr(raw.extId, 64); if (extId) e.extId = extId;
   const sig = cleanStr(raw.sig, 120); if (sig) e.sig = sig;
+  if (Number.isInteger(raw.dist) && raw.dist >= 0 && raw.dist <= 1000000) e.dist = raw.dist; // meter (Strava)
+  if (Number.isInteger(raw.hr) && raw.hr >= 30 && raw.hr <= 250) e.hr = raw.hr;              // gennemsnitspuls (Strava)
 
   // Fremadkompatibilitet: ukendte felter overlever kun som korte primitiver (højst 16 stk.).
   let extra = 0;

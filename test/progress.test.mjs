@@ -78,6 +78,32 @@ test('validering: grænser, enum, længder og tidsstempler', () => {
   assert.equal(n({ updatedAt: '2026-11-24T08:58:01.123+02:00' }).updatedAt, T1); // kanonisk UTC, så strengsammenligning virker
 });
 
+test('Strava-felterne dist (meter, heltal 0..1.000.000) og hr (slag/min, heltal 30..250) valideres; andre værdier droppes feltet', () => {
+  const n = raw => normalizeEntry({ done: true, updatedAt: T1, ...raw });
+  assert.equal(n({ dist: 0 }).dist, 0);
+  assert.equal(n({ dist: 10234 }).dist, 10234);
+  assert.equal(n({ dist: 1000000 }).dist, 1000000);
+  for (const bad of [-1, 1000001, 10.5, '10234', NaN, null, Infinity]) assert.ok(!('dist' in n({ dist: bad })), `dist ${bad}`);
+  assert.equal(n({ hr: 30 }).hr, 30);
+  assert.equal(n({ hr: 148 }).hr, 148);
+  assert.equal(n({ hr: 250 }).hr, 250);
+  for (const bad of [29, 251, 0, 148.5, '148', NaN, null]) assert.ok(!('hr' in n({ hr: bad })), `hr ${bad}`);
+  // fast punkt: en gyldig Strava-post normaliseres til sig selv, og serialiseringen bevarer felterne
+  const e = { done: true, updatedAt: T1, dev: 'strava', at: '2026-11-24T06:57:40.000Z', min: 42, src: 'strava', extId: '12345678901', sig: 'run:Løb', dist: 10234, hr: 148 };
+  assert.deepEqual(normalizeEntry(e), e);
+  const file = serializeWeek('u05', { '1-0': e });
+  assert.deepEqual(parseWeekFile('u05.json', file).week['1-0'], e);
+  // felterne er kendte, så de tæller ikke med blandt de højst 16 ukendte felter
+  const many = Object.fromEntries(Array.from({ length: 16 }, (_, i) => [`k${i}`, i]));
+  assert.equal(normalizeEntry({ done: true, updatedAt: T1, dist: 5, hr: 99, ...many }).k15, 15);
+});
+
+test('gravsten mister også dist og hr', () => {
+  assert.deepEqual(normalizeEntry({ done: false, updatedAt: T1, dev: 'abc', dist: 5000, hr: 150, src: 'strava', extId: '1' }), { done: false, updatedAt: T1, dev: 'abc' });
+  assert.deepEqual(stampEntry(null, done(T1, { dist: 5000, hr: 150 }), { now: T2, dev: 'abc' }), { done: false, updatedAt: T2, dev: 'abc' });
+  assert.deepEqual(stampEntry({ done: false, dist: 5000, hr: 150 }, null, { now: T2, dev: 'abc' }), { done: false, updatedAt: T2, dev: 'abc' });
+});
+
 test('ukendte felter overlever kun som korte primitiver', () => {
   const e = normalizeEntry(JSON.parse(JSON.stringify({ done: true, updatedAt: T1, kcal: 512, tag: 'rolig', flag: true, lang: 'x'.repeat(201), obj: { a: 1 }, arr: [1], nul: null, 'ugyldig nøgle': 1 }).replace(/}$/, ',"__proto__":"x"}')));
   assert.equal(e.kcal, 512);

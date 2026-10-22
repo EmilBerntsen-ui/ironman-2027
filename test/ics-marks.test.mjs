@@ -71,6 +71,19 @@ test('noter, RPE og andre felter fra fremdriften lækker aldrig ind i .ics', () 
   }
 });
 
+test('Strava-felterne dist og hr (fra fixturen) når aldrig .ics; kun ✅ og minutter gør', () => {
+  const stravaEntry = progress.u01['2-1'];
+  assert.equal(stravaEntry.src, 'strava');
+  assert.equal(stravaEntry.dist, 98765, 'fixturen bærer dist');
+  assert.equal(stravaEntry.hr, 187, 'fixturen bærer hr');
+  for (const ics of [marked, unfold(marked), buildIcs(weeks, now, { progress, schedule: SCHEDULE })]) {
+    assert.ok(!/(?<!\d)98765(?!\d)/.test(ics), 'dist');
+    assert.ok(!/(?<!\d)187(?!\d)/.test(ics), 'hr');
+    for (const word of ['strava', 'Strava', '12345678901', 'bpm']) assert.ok(!ics.includes(word), word);
+  }
+  assert.match(byUid(marked).get('u01-2-1@ironman2027'), /^DESCRIPTION:Gennemført · 90 min\\n\\n/m);
+});
+
 test('buildIcs læser kun `done` og `min` fra et pas', () => {
   const touched = new Set();
   const spy = entry => new Proxy(entry, { get(t, k, r) { if (typeof k === 'string') touched.add(k); return Reflect.get(t, k, r); } });
