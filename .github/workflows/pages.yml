@@ -5,12 +5,21 @@ name: pages
 # Secrets: CAL_TOKEN (påkrævet), GIST_ID + GIST_READ_TOKEN (begge skal sættes for ✅-mærkerne; mangler en af dem, advarer
 #          hentetrinnet, og kalenderen bygges uden mærker, men udrulningen fejler ikke),
 #          CAL_SCHEDULE (valgfri: JSON med starttider; uden den bliver pas heldagsbegivenheder).
+# Strava-synk (docs/strava.md): STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_REFRESH_TOKEN og GIST_WRITE_TOKEN (alle fire, plus GIST_ID).
+#          Mangler de, springer Strava-trinnet over med en ::notice::, og udrulningen fortsætter uændret. Trinnet fejler aldrig udrulningen;
+#          ved død Strava-adgang eller en fejl udrulles siden, og derefter fejler cleanup-jobbet, så GitHub sender en mail.
 on:
   push:
     branches: [main]
   schedule:
-    - cron: '17 2 * * *' # 04:17 CEST / 03:17 CET; :17 undgår forsinkelser ved hele timer
+    - cron: '17 2 * * *'  # 04:17 CEST / 03:17 CET; :17 undgår forsinkelser ved hele timer
+    - cron: '17 20 * * *' # 22:17 CEST / 21:17 CET: dagens Strava-pas samme aften
   workflow_dispatch:
+    inputs:
+      strava_days:
+        description: 'Strava: dage tilbage (1–30)'
+        required: false
+        default: '3'
 
 permissions:
   contents: read
@@ -33,6 +42,8 @@ jobs:
     permissions:
       contents: read
       pages: write # actions/configure-pages
+    outputs:
+      strava: ${{ steps.strava.outputs.status || steps.strava.outcome }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -45,7 +56,23 @@ jobs:
       - name: Test
         run: node --test
 
-      - name: Fetch progress (secret gist)
+      # Matcher de seneste Strava-aktiviteter mod planen og skriver pas i den hemmelige gist (docs/strava.md). Fejler aldrig udrulningen:
+      # `status` (ok/skipped/unavailable/auth/error) sendes videre til cleanup-jobbet, som alarmerer ved auth/error. inputs.strava_days når
+      # kun scriptet som env (aldrig i et run-script), og scriptet validerer den. Kun dette trin får Strava-secrets og skrive-tokenet.
+      - name: Strava sync
+        id: strava
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+          STRAVA_REFRESH_TOKEN: ${{ secrets.STRAVA_REFRESH_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GIST_WRITE_TOKEN: ${{ secrets.GIST_WRITE_TOKEN }}
+          STRAVA_LOOKBACK_DAYS: ${{ inputs.strava_days || '3' }}
+        run: node scripts/strava-sync.mjs
+
+      - name: Fetch progress (secret gist) # læser også de netop skrevne Strava-pas
         env:
           GIST_ID: ${{ secrets.GIST_ID }}
           GIST_READ_TOKEN: ${{ secrets.GIST_READ_TOKEN }}
@@ -118,3 +145,12 @@ jobs:
       - name: Keep cron alive (offentlige repos slår schedule fra efter 60 dages inaktivitet)
         if: github.event_name == 'schedule'
         run: gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/enable"
+
+      # Siden er udrullet på dette tidspunkt. Fejler synkroniseringen (død adgang eller en fejl), fejler denne kørsel, og GitHub mailer.
+      - name: Strava alert
+        if: contains(fromJSON('["auth","error","failure"]'), needs.build.outputs.strava)
+        env:
+          STRAVA_STATUS: ${{ needs.build.outputs.strava }}
+        run: |
+          echo "::error::Strava-synk fejlede ($STRAVA_STATUS). Kør node scripts/strava-auth.mjs ved 'auth'; se docs/guides/strava.md"
+          exit 1
