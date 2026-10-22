@@ -2,7 +2,7 @@
 
 Status: decided 2026-10-22. Phase 2 agents implement this; deviations need a note in their PR.
 
-Scope: one source tree, two build targets: (a) an installable PWA on GitHub Pages with cross-device sync through a secret Gist and a secret-path calendar feed, (b) the existing claude.ai Artifact. Strava (phase 6) gets data-model hooks only.
+Scope: one source tree, two build targets: (a) an installable PWA on GitHub Pages with cross-device sync through a secret Gist and a secret-path calendar feed, (b) the existing claude.ai Artifact. Strava (phase 6) was first a set of data-model hooks, and is now designed and implemented in [strava.md](strava.md).
 
 Assumed repo and URL: `github.com/EmilBerntsen-ui/ironman-2027` (public), served at `https://emilberntsen-ui.github.io/ironman-2027/`. Every site URL is relative, so renaming the repo only changes the guides.
 
@@ -16,8 +16,9 @@ Assumed repo and URL: `github.com/EmilBerntsen-ui/ironman-2027` (public), served
 | Gist layout | One file per week (`u01.json`…`u43.json`) plus a marker file `_ironman-2027.json`. A PATCH sends only the dirty week files |
 | Sync | State-based. Each device keeps a full merged replica. Sync runs GET (with ETag), merge, PATCH, then a verify read. Polls every 60 s while visible and on focus/online. A queue of dirty weeks lives in localStorage |
 | Auth/security | One fine-grained PAT per device, with Gists read/write only, kept in localStorage. Strict meta CSP, self-hosted fonts, no third-party JS |
-| CI/CD | Triggers: push to `main`, cron `17 2 * * *` and manual dispatch. Steps: test, fetch gist, build, `deploy-pages`, then delete the Pages artifact |
+| CI/CD | Triggers: push to `main`, cron `17 2 * * *` and `17 20 * * *` (the second one is for Strava) and manual dispatch (input `strava_days`). Steps: test, Strava sync (see [strava.md](strava.md)), fetch gist, build, `deploy-pages`, then delete the Pages artifact |
 | ICS | `✅` for done sessions and nothing else: sessions that are not done, past or future, are unchanged (no mark for missed sessions). The marks need `GIST_ID` and `GIST_READ_TOKEN`. Only `done` and `min` are read. Served at the secret path `cal/<CAL_TOKEN>/ironman-2027.ics` |
+| Strava | The Action imports activities and writes `src:"strava"` entries into the gist, so sessions show as done without ticking. Spec in [strava.md](strava.md): personal API app, rotated refresh token stored encrypted in the gist (`_strava.json`), scope `activity:read` (`--read-all` for `activity:read_all`), a manual tick always wins. Only `dist`/`hr` are new fields, and the `.ics` ignores them |
 | PWA | The whole shell is precached and served cache-first, versioned by content hash. The SW ignores `/cal/` and cross-origin requests. An update toast prompts the reload |
 
 ---
@@ -228,11 +229,13 @@ Changes to `app.js` (2b):
   "note": "Tung i benene",                   // ≤ 1000 chars
   "src": "manual",                           // "manual" | "strava"; absent = manual
   "extId": "12345678901",                    // external activity id (Strava), string
-  "sig": "run:Løbeintervaller"               // `${s.s}:${s.t}` of the planned session at log time
+  "sig": "run:Løbeintervaller",              // `${s.s}:${s.t}` of the planned session at log time
+  "dist": 10234,                             // metres, integer 0..1,000,000 (Strava only; never in the .ics)
+  "hr": 148                                  // average heart rate, integer 30..250 (Strava only; never in the .ics)
 }
 ```
 
-- Tombstone: `{"done": false, "updatedAt": "…", "dev": "…"}`. All detail fields are dropped.
+- Tombstone: `{"done": false, "updatedAt": "…", "dev": "…"}`. All detail fields are dropped, `dist` and `hr` too.
 - Keys are unchanged from v1. `weekId` matches `/^u\d{2}$/`. `sessionKey` matches `/^[0-6]-\d{1,2}$/` (day with Monday = 0, then session index).
 
 ### 3.2 `src/progress.js` API
@@ -283,6 +286,7 @@ Validation in `normalizeEntry` runs on every remote byte before it reaches state
 - Timestamps must give a finite `Date.parse`, otherwise they become `EPOCH`.
 - `src` must be a value of the enum.
 - Length limits: `extId` ≤ 64, `sig` ≤ 120, `dev` ≤ 16.
+- `dist` must be an integer 0..1,000,000 and `hr` an integer 30..250, otherwise the field is dropped.
 - Unknown keys are kept only when the value is a primitive of ≤ 200 characters. This gives bounded forward compatibility.
 
 ### 3.4 Gist layout
@@ -361,11 +365,12 @@ There is also a path without the UI: Claude reads collection `progress` with the
 
 Afterwards the artifact keeps its own separate storage. There is deliberately no artifact↔gist bridge: the artifact sandbox cannot reach `api.github.com`, and a PAT must never be stored in the artifact DB.
 
-### 3.7 Strava hooks (phase 6)
+### 3.7 Strava (phase 6)
 
-Only these hooks exist now:
-- The fields `src`, `extId` and `min`.
-- Reserved rule: an importer creates entries only for sessions that have no `done:true` entry, and it never overwrites `src:"manual"` entries.
+Designed in [strava.md](strava.md). What this document fixes:
+- The fields `src`, `extId`, `min` and (new) `dist` and `hr`.
+- The rule: an importer creates entries only for sessions that have no `done:true` entry, and it never overwrites a done entry (manual or Strava). A Strava entry carries `updatedAt` = the activity's end, so a manual tick made after the workout wins last-writer-wins.
+- The gist gets one more file, `_strava.json`, which only CI writes (encrypted refresh token and an activity ledger). `parseWeekFile` only accepts `u\d\d.json`, so every existing reader ignores it.
 
 ---
 
@@ -445,19 +450,37 @@ API headers on every call: `Authorization: Bearer <token>`, `Accept: application
 name: pages
 on:
   push: { branches: [main] }
-  schedule: [{ cron: '17 2 * * *' }]    # 04:17 CEST / 03:17 CET; :17 avoids top-of-hour cron delays
+  schedule:
+    - cron: '17 2 * * *'                # 04:17 CEST / 03:17 CET; :17 avoids top-of-hour cron delays
+    - cron: '17 20 * * *'               # 22:17 CEST / 21:17 CET: today's Strava sessions the same evening
   workflow_dispatch:
+    inputs:
+      strava_days: { description: 'Strava: days back (1–30)', required: false, default: '3' }
 permissions: { contents: read }
 concurrency: { group: pages, cancel-in-progress: false }
 env: { TZ: Europe/Copenhagen }
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      strava: '${{ steps.strava.outputs.status || steps.strava.outcome }}'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
       - run: node --test
+      - name: Strava sync                 # strava.md §7: skipped with a ::notice:: when the secrets are absent; never fails the deploy
+        id: strava
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          STRAVA_CLIENT_ID: '${{ secrets.STRAVA_CLIENT_ID }}'
+          STRAVA_CLIENT_SECRET: '${{ secrets.STRAVA_CLIENT_SECRET }}'
+          STRAVA_REFRESH_TOKEN: '${{ secrets.STRAVA_REFRESH_TOKEN }}'
+          GIST_ID: '${{ secrets.GIST_ID }}'
+          GIST_WRITE_TOKEN: '${{ secrets.GIST_WRITE_TOKEN }}'
+          STRAVA_LOOKBACK_DAYS: "${{ inputs.strava_days || '3' }}"
+        run: node scripts/strava-sync.mjs
       - name: Fetch progress (secret gist)
         env: { GIST_ID: '${{ secrets.GIST_ID }}', GIST_READ_TOKEN: '${{ secrets.GIST_READ_TOKEN }}' }
         run: node scripts/fetch-progress.mjs --out "$RUNNER_TEMP/progress.json"
@@ -494,6 +517,12 @@ jobs:
       - name: Keep cron alive (public repos disable schedules after 60 days without activity)
         if: github.event_name == 'schedule'
         run: gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/enable"
+      - name: Strava alert                # the site is already deployed here; a failing run makes GitHub send an e-mail
+        if: contains(fromJSON('["auth","error","failure"]'), needs.build.outputs.strava)
+        env: { STRAVA_STATUS: '${{ needs.build.outputs.strava }}' }
+        run: |
+          echo "::error::Strava sync failed ($STRAVA_STATUS). Run node scripts/strava-auth.mjs for 'auth'; see docs/guides/strava.md"
+          exit 1
 ```
 
 - There is no `pull_request` trigger, so secrets are never exposed to fork code.
@@ -503,14 +532,19 @@ jobs:
 
 | Secret | Value | Used by |
 |---|---|---|
-| `GIST_ID` | id of the progress gist (shown in the settings dialog). Needed for ✅ marks together with `GIST_READ_TOKEN` | fetch-progress, leak guard |
+| `GIST_ID` | id of the progress gist (shown in the settings dialog). Needed for ✅ marks together with `GIST_READ_TOKEN` | fetch-progress, leak guard, Strava sync |
 | `GIST_READ_TOKEN` | Fine-grained PAT with no extra permissions. **Required for ✅ marks**: without it fetch-progress skips the fetch and the calendar is built without marks (see §5.3). Secret gists are readable by id, so the token adds no access, it only lifts the rate limit from 60/h to 5,000/h. If 2c finds that it gets a 404, add Gists permission | fetch-progress |
 | `CAL_TOKEN` | `openssl rand -hex 20` (40 chars), also kept in the user's password manager | build, leak guard |
+| `STRAVA_CLIENT_ID` | numeric id of the personal Strava API app | Strava sync only |
+| `STRAVA_CLIENT_SECRET` | the app's secret; also the key material for `_strava.json` | Strava sync only |
+| `STRAVA_REFRESH_TOKEN` | seed refresh token from `scripts/strava-auth.mjs` (it sets all three `STRAVA_*` secrets) | Strava sync only |
+| `GIST_WRITE_TOKEN` | fine-grained PAT "IM2027 CI write": Gists read and write, expiry 2027-09-30, separate from the device tokens | Strava sync only |
 | `GITHUB_TOKEN` | automatic | cleanup |
 
 One-time setup:
 - Set the secrets with `gh secret set CAL_TOKEN` (and the same for the others).
 - The progress gist can be created before the app is connected: `GITHUB_TOKEN=… node scripts/create-gist.mjs | gh secret set GIST_ID`. The script uses `GistStore.findOrCreate`, prints only the gist id, and refuses to create a second gist: if one with the marker file exists, it prints that id instead.
+- Strava is optional and set up with the checklist in [guides/strava.md](guides/strava.md). Without its four secrets the sync step is skipped with a notice and everything else works as before.
 - Set the Pages source to Actions: `gh api -X POST repos/EmilBerntsen-ui/ironman-2027/pages -f build_type=workflow`.
 
 ### 5.3 `scripts/fetch-progress.mjs`

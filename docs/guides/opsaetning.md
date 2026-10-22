@@ -50,6 +50,8 @@ Del 1 er engangsopsætningen af repoet, og den gælder kun for ejeren. Del 2 fly
 
 Mærkerne følger det sidste build. Efter ændringer i planen kan du køre `gh workflow run pages.yml` for at opdatere med det samme.
 
+**Valgfrit: Strava-synk.** Vil du have fluebenene sat automatisk ud fra dine Strava-aktiviteter, så følg [Strava-synk](strava.md). Uden den virker alt andet som beskrevet her.
+
 ## Del 2: Flyt dine afkrydsninger fra claude.ai-siden
 
 Gør det én gang. Forudsætningen er, at appen er forbundet til GitHub (del 1, trin 5).

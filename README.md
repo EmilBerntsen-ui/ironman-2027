@@ -11,6 +11,7 @@ Projektet har ingen afhængigheder – kun Node (v20+). Arkitekturen er beskreve
 3. [Installér appen på hjemmeskærmen](docs/guides/installer-app.md)
 4. [Forbind GitHub (synk mellem enheder)](docs/guides/forbind-github.md)
 5. [Opsætning og flytning af afkrydsninger](docs/guides/opsaetning.md)
+6. [Strava-synk (flueben uden at sætte dem selv)](docs/guides/strava.md)
 
 ## Filer
 
@@ -21,8 +22,8 @@ Projektet har ingen afhængigheder – kun Node (v20+). Arkitekturen er beskreve
 | `src/app.html`, `src/app.js`, `src/styles.css` | Siden: kalender, detaljevisning med log, præstationsgraf og guide. |
 | `src/ics.js` | Kalendereksport (RFC 5545). |
 | `build.mjs`, `build/` | Byggescript og mål: `artifact` (claude.ai) og `site` (GitHub Pages). |
-| `scripts/` | Hent fremdrift til kalenderen (CI) og opret Gist'en fra terminalen. |
-| `docs/` | Arkitektur og guides. |
+| `scripts/` | Hent fremdrift til kalenderen (CI), opret Gist'en fra terminalen og Strava-synk (`strava-sync.mjs` i CI, `strava-auth.mjs` til engangsgodkendelsen, fælles kode i `scripts/lib/`). |
+| `docs/` | Arkitektur, [Strava-design](docs/strava.md) og guides. |
 | `test/` | Tests af plan, fremdrift, build og .ics-format. |
 
 ## Byg og test
