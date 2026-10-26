@@ -35,12 +35,13 @@ src/progress.js             NEW  schema v2: pure logic, runs in Node and the bro
 src/pace.js                 NEW  recommended pace per zone, parsing and formatting of pace (pure logic, Node and browser)
 src/nutrition.js            NEW  day types, macros, energy estimate, fueling per session, weight (local only), `Kost` guide data (pure logic)
 src/ics.js                  + completion marks
-src/app.html                body markup only (head moved to the shells)
+src/app.html                body markup only (head moved to the shells): five tab views, the tab bar and the log sheet (§2.4)
 src/shell.artifact.html     NEW  title/meta/Google Fonts/<style>/<script> wrapper (no doctype/html/head/body)
 src/shell.site.html         NEW  full document: doctype, CSP, manifest, icons
 src/app.js                  uses a Store
 src/styles.css              frozen during phase 2
-src/settings.js / .css      NEW  sync dialog: connect, status, export/import
+src/views.js / .css         NEW  tabs (§2.4): pure helpers (routing, key sessions, compliance, stat cards) and the tab bar, top bar and view styles
+src/settings.js / .css      NEW  sync UI: connect, status, weight, export/import. A dialog, or inline in the Mere tab (`container`)
 src/store/local.js          NEW  LocalStore, deviceId
 src/store/artifact-db.js    NEW  ArtifactDbStore
 src/store/gist.js           NEW  GistStore
@@ -79,13 +80,13 @@ scripts/make-icons.mjs      zero-dependency PNG generator
 export const TARGETS = {
   artifact: {
     shell: 'src/shell.artifact.html',
-    css: ['src/styles.css', 'src/settings.css'],
-    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'],
+    css: ['src/styles.css', 'src/views.css', 'src/settings.css'],
+    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'],
   },
   site: {
     shell: 'src/shell.site.html',
-    css: ['src/fonts.css', 'src/styles.css', 'src/settings.css', 'src/pwa.css'],
-    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/store/local.js', 'src/store/gist.js', 'src/settings.js', 'src/app.js', 'src/pwa.js'],
+    css: ['src/fonts.css', 'src/styles.css', 'src/views.css', 'src/settings.css', 'src/pwa.css'],
+    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/store/local.js', 'src/store/gist.js', 'src/settings.js', 'src/app.js', 'src/pwa.js'],
   },
 };
 export function bundleJs(files, { target, version }) /* → string */;
@@ -211,10 +212,45 @@ Changes to `app.js` (2b):
 - `entry(wk, key)` returns the entry only when `isDone(e)`.
 - `setEntry(key, val)` calls `store.save(wk, sub, val ? { ...val, done: true, sig: sessionSig(s) } : null)`.
 - `store.subscribe(refresh)`, and `store.onStatus(s => { savemode.textContent = s.label; })`.
-- `#savemode` becomes `<button type="button" class="savemode" id="savemode">`, which opens the settings dialog. A visible "⚙ Indstillinger" button (`#settingsBtn`, at least 44 × 44 px) next to it opens the same dialog, and "Angiv vægt" link-buttons (`data-weight`, shown only without a saved weight) open it with the weight field focused.
+- (Superseded by §2.4: the settings are now the Mere tab, not a dialog.) `#savemode` becomes `<button type="button" class="savemode" id="savemode">`, which opens the settings dialog. A visible "⚙ Indstillinger" button (`#settingsBtn`, at least 44 × 44 px) next to it opens the same dialog, and "Angiv vægt" link-buttons (`data-weight`, shown only without a saved weight) open it with the weight field focused.
 - After connect or disconnect, settings calls `location.reload()`. Re-initialising this way is simplest and correct.
 - Today, today's index and the current week are recomputed by `rollDay()` on `visibilitychange` (to visible), `pageshow` and `focus` when the date has changed. It redraws the header, grid, agenda and charts. A week the user navigated to stays selected; a user who was on the old "this week" follows to the new one. An installed PWA can stay in the background for days, so the date computed at load time would go stale.
 - Accessibility: the page body is a single `<main>` landmark. The week bars are `role="button"` groups whose accessible name (`aria-label`) is the same text as their tooltip (`<title>`).
+
+### 2.4 Tabbed UI (`app.html`, `app.js`, `views.js`, `views.css`)
+
+The page is five views in one `<main>`, with a fixed tab bar. Both targets get the same markup. `app.js` shows one view at a time (`hidden`), so everything stays in one document, works offline and keeps the CSP (no inline scripts or handlers).
+
+| Tab | Hash and view id | Content |
+|---|---|---|
+| I dag (default) | `#idag` | Race-bib header (countdown, Køge countdown, overall progress), today's sessions as cards (recommended pace, Kost before/during/after, `Log pas` button that opens the existing sheet, quick check), today's Kost chip, Fitness (CTL), Form (TSB) and Træthed (ATL) cards with a sparkline each, this week's hours and sessions, next key session, and the two empty mount points `#addWorkout` and `#advice` |
+| Kalender | `#kalender` | The week grid (desktop) or agenda with prev/next/swipe (phone), unchanged |
+| Kost | `#kost` | Today's and this week's targets (kcal, carbohydrate, protein; grams with a weight, otherwise g/kg and "Angiv vægt"), then the Kost guide |
+| Analyse | `#analyse` | PMC chart, hours per week, and a compliance table per sport (sessions and minutes done against planned so far) |
+| Mere | `#mere` | Settings inline (GitHub sync, weight, export/import), calendar-subscription help (never the secret URL), zones, rules, schedule, about and version |
+
+Routing (`parseRoute` in `views.js`, `applyRoute` and `navigate` in `app.js`). Plain hash tokens only: `#idag`, `#kalender`, `#kost`, `#analyse`, `#mere`. The token `settings` is reserved by the claude.ai viewer and is never used. The tab bar links are ordinary `<a href="#…">`, so the back button works without extra code. A week link `#u12` opens Kalender at week 12; an empty or unknown hash shows I dag. `applyRoute()` is idempotent and runs on `hashchange` and at start. `navigate(name)` sets the hash and applies the route at once (the Analyse bars, the status buttons, ⚙ and "Angiv vægt" use it). Entering a view resets the scroll, redraws the PMC chart (it cannot be measured while hidden) and scrolls the calendar grid to the selected week. Each view carries a large `scroll-margin-top`, because the hash token is also the element id and the browser would otherwise scroll to it.
+
+Navigation chrome. The tab bar is fixed at the bottom (`padding-bottom: env(safe-area-inset-bottom)`, targets at least 58 px high, inline SVG icons, Danish labels, `aria-current="page"` on the active tab) and the content has bottom padding for it. From 900 px it becomes a left rail with the same tabs and the same active state. CSS variables `--bar-b` (bottom bar height) and `--rail` (rail width) let other fixed layers (the update toast in `pwa.css`) stay clear of it. The race-bib header is only on I dag. The other tabs get a slim sticky top bar with the tab title, a second sync-status button (`#savemodeTop`) and a ⚙ (`#settingsTop`, hidden on Mere) that opens Mere. `#savemode` and `#settingsBtn` in the bib do the same. Both status buttons are painted by `paintStatus`.
+
+Settings in Mere. `mountSettings({ container: #settingsMount, onReveal })` draws the sync UI inline. `open({ focusWeight })` calls `onReveal` (which navigates to Mere) and then focuses the weight field. `settings.syncWeight()` refreshes the weight field after a change in another tab. Without `container` the dialog mode is unchanged. A log sheet that is open when "Angiv vægt" is pressed is closed first.
+
+Re-rendering. `refresh()` (called by `store.subscribe`, by the first load of a Store, after a weight change through `repaintKost()` and on a day roll through `rollDay()`) ends with `paintToday()` and `paintCompliance()`. `paintToday()` redraws the whole I dag tab from `state`, the weight and today's date; `paintKostTab()` redraws the Kost targets (called from `paintKost()` and `rollDay()`). Before the plan starts or after the race, I dag shows a message instead of session cards and the cards and key session still work.
+
+Stat cards. They show the actual PMC (`actualPmc()`, from the logged sessions with the minutes entered). Until any session is logged they show the planned PMC, labelled "Plan", because an actual series without logs would only decay from the seed. TSB is the pre-today value, as in `pmc()`. The delta is the change over 7 days.
+
+Compliance. `complianceBySport()` counts planned sessions on days before today and completed sessions up to and including today. A session completed today counts as planned too. Minutes are the entered ones, otherwise the planned ones. Green from 90 %, yellow from 60 %, otherwise red (of minutes).
+
+Mount points for later work, both inside the I dag view and empty:
+
+```html
+<div id="addWorkout"></div>      <!-- "+ Tilføj træning" button/form -->
+<section id="advice"></section>  <!-- plan-adjustment advice -->
+```
+
+They have `display: none` while `:empty`. Render into them from `paintToday()` (it runs on every state change), so they stay current.
+
+Tests: `test/tabs.test.mjs` (routing, tab bar in both builds, Kost, compliance, Mere), `test/idag.test.mjs` (I dag for fixed fake dates), `test/views.test.mjs` (pure helpers), and `test/app-harness.mjs` (runs the bundled app in the fake DOM with a fake `location`).
 
 ---
 
@@ -485,7 +521,7 @@ Fonts are self-hosted on the site. The latin subset covers æøå. Files: Barlow
 
 ### 4.3 "Forbind GitHub" UX (`settings.js`, site only)
 
-1. The status button opens the "Synkronisering" dialog, built by `settings.js`; it reuses the `.sheet` styles. When not connected, it shows:
+1. The status button opens the Mere tab (§2.4), where `settings.js` draws the "Synkronisering" block inline (`mountSettings({ container })`; without `container` it is a `.sheet` dialog, as in the first version). When not connected, it shows:
    - a three-line explainer;
    - a link to `https://github.com/settings/personal-access-tokens/new`;
    - the exact settings from §4.1;

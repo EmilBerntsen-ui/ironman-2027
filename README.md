@@ -21,7 +21,8 @@ Projektet har ingen afhængigheder – kun Node (v20+). Arkitekturen er beskreve
 | `src/progress.js` | Afkrydsninger og tider (skema v2): sammenfletning, validering og eksport. Ren logik, bruges i Node og i browseren. |
 | `src/pace.js` | Anbefalet fart pr. pas ud fra tre grundtal (løbetærskel, CSS og cykeltærskel), plus visning og tolerant indtastning af faktisk pace. Ren logik, bruges i Node og i browseren. |
 | `src/nutrition.js` | Kost: dagtyper, kulhydrat pr. kg, energi (estimat), før/under/efter pr. pas, vægt (kun lokalt) og kostguiden som data. Ren logik, bruges i Node og i browseren. |
-| `src/app.html`, `src/app.js`, `src/styles.css` | Siden: kalender, detaljevisning med log, præstationsgraf og guides. |
+| `src/app.html`, `src/app.js`, `src/styles.css`, `src/views.css` | Siden: fem faner med en menu i bunden (I dag, Kalender, Kost, Analyse, Mere), detaljevisning med log, præstationsgraf og guides. |
+| `src/views.js` | Rene hjælpefunktioner til fanerne: routing (`#idag`, `#kalender`, `#kost`, `#analyse`, `#mere`, `#u12`), nøglepas, overholdelse pr. sport og stat-kort. Bruges i Node og i browseren. |
 | `src/ics.js` | Kalendereksport (RFC 5545). |
 | `build.mjs`, `build/` | Byggescript og mål: `artifact` (claude.ai) og `site` (GitHub Pages). |
 | `scripts/` | Hent fremdrift til kalenderen (CI), opret Gist'en fra terminalen og Strava-synk (`strava-sync.mjs` i CI, `strava-auth.mjs` til engangsgodkendelsen, fælles kode i `scripts/lib/`). |
@@ -48,6 +49,8 @@ Ret plan eller tekst i `src/`, og kør `node build.mjs` igen. Rediger aldrig fil
 Bemærk: Importerer du filen igen efter ændringer i planen, kan nogle apps lave dubletter. Slet i så fald den gamle kalender, og importér på ny.
 
 ## Siden
+
+Siden har fem faner med en menu i bunden (på brede skærme i venstre side): **I dag** (dagens pas med anbefalet fart, kost og log, Fitness/Form/Træthed, ugens fremdrift og næste nøglepas), **Kalender**, **Kost** (dagens og ugens mål samt guiden), **Analyse** (præstationsgraf, timer pr. uge og overholdelse pr. sport) og **Mere** (synk, vægt, eksport/import, zoner, regler og version). Adresserne er `#idag`, `#kalender`, `#kost`, `#analyse` og `#mere`, og `#u12` åbner kalenderen ved uge 12. Se [arkitekturen](docs/architecture.md) §2.4.
 
 `dist/artifact/index.html` er bygget til at blive vist som et claude.ai-Artifact. Den gemmer afkrydsninger, faktisk tid, faktisk pace, RPE og noter i Artifact-databasen (samling `progress`, ét dokument pr. uge `u01`…`u43`), så du kan se dem fra både telefon og computer. Åbnes filen uden for claude.ai, gemmes det kun i den browser (localStorage).
 
