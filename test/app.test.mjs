@@ -10,8 +10,8 @@ import { KOST_DISCLAIMER, KOST_REPORT_URL, WEIGHT_KEY, dayMinutes, dayNutrition,
 import { fakeDocument, fakeWindow, memoryStorage } from './dom-harness.mjs';
 import { settle } from './fake-gist.mjs';
 
-const SITE_FILES = ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/store/local.js', 'src/settings.js', 'src/app.js'];
-const ARTIFACT_FILES = ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'];
+const SITE_FILES = ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/store/local.js', 'src/settings.js', 'src/app.js'];
+const ARTIFACT_FILES = ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'];
 
 function loadApp({ target = 'site', now = '2026-11-02T10:00:00', claude, storage = memoryStorage() } = {}) {
   const clock = { t: new Date(now).getTime(), set(v) { this.t = new Date(v).getTime(); } };
