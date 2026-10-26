@@ -73,3 +73,24 @@ test('.ics: én VEVENT pr. pas, CRLF, foldet ≤ 75 oktetter, stabile UID', () =
   assert.match(ics, /DTSTART;VALUE=DATE:20270822/); // uden skema er pas heldagsbegivenheder (starttider er private, se test/ics-marks.test.mjs)
   assert.equal(fold('a'.repeat(80)), 'a'.repeat(75) + '\r\n ' + 'a'.repeat(5));
 });
+
+test('.ics: hver DESCRIPTION har en "Anbefalet"-linje med fart (undtagen styrke), og den ligger efter pasets tekst', () => {
+  const ics = buildIcs(weeks, new Date('2026-10-22T12:00:00Z')).replace(/\r\n /g, '');
+  const events = ics.split('BEGIN:VEVENT\r\n').slice(1);
+  assert.equal(events.length, sessions.filter(x => x.s.s !== 'rest').length);
+  const unesc = t => t.replace(/\\n/g, '\n').replace(/\\([,;\\])/g, '$1');
+  let withPace = 0;
+  sessions.filter(x => x.s.s !== 'rest').forEach(({ w, di, si, s }) => {
+    const ev = events.find(e => e.startsWith(`UID:${w.id}-${di}-${si}@ironman2027`));
+    const desc = unesc(/^DESCRIPTION:(.*)$/m.exec(ev)[1]);
+    if (s.s === 'str') { assert.ok(!desc.includes('Anbefalet'), `${w.id} ${s.t}`); return; }
+    withPace++;
+    const line = desc.split('\n').find(l => l.startsWith('Anbefalet: '));
+    assert.ok(line, `${w.id}-${di}-${si} ${s.t}`);
+    assert.ok(desc.indexOf(s.d) < desc.indexOf(line), 'efter pasets tekst');
+    assert.ok(desc.indexOf(line) < desc.indexOf(`Uge ${w.n} · `), 'før ugelinjen');
+  });
+  assert.ok(withPace > 300);
+  const run = unesc(/^DESCRIPTION:(.*)$/m.exec(events.find(e => e.startsWith('UID:u06-1-0@')))[1]);
+  assert.match(run, /\nAnbefalet: 6:45–7:15 \/km · hovedsæt 5:25–5:35 \/km\n/);
+});

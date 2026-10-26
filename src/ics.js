@@ -2,6 +2,7 @@
 // Kører kun i Node (build og tests), bundles ikke ind i siden.
 import { addDays, PH } from './plan.js';
 import { isDone } from './progress.js';
+import { paceText } from './pace.js';
 
 const EMOJI = { swim: '🏊', bike: '🚴', run: '🏃', str: '🏋️', race: '🏁' };
 
@@ -89,7 +90,8 @@ export function buildIcs(weeks, now = new Date(), { progress = null, schedule = 
         const e = progress?.[w.id]?.[`${di}-${si}`];
         const done = isDone(e);
         const mark = done ? `Gennemført${Number.isInteger(e.min) && e.min > 0 ? ` · ${e.min} min` : ''}\n\n` : '';
-        const desc = `${mark}${s.d}\n\nUge ${w.n} · ${PH[w.ph].name}${w.note && !noted ? '\n' + w.note : ''}`;
+        const pace = paceText(s); // "Anbefalet: …" (ikke for styrke)
+        const desc = `${mark}${s.d}${pace ? `\n${pace}` : ''}\n\nUge ${w.n} · ${PH[w.ph].name}${w.note && !noted ? '\n' + w.note : ''}`;
         noted = true;
 
         const when = start === null
