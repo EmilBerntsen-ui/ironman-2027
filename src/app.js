@@ -370,6 +370,8 @@ sheet.addEventListener('submit', ev => {
 sheet.addEventListener('close', () => { openKey = null; });
 
 document.addEventListener('click', ev => {
+  const link = ev.target.closest('a[href^="#"]'); // fanerne og ugelinks (#u12): som et almindeligt hashlink, men også hvor adresselinjen er låst
+  if (link && !(ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button > 0)) { ev.preventDefault(); goHash(link.getAttribute('href')); return; }
   const c = ev.target.closest('[data-chk]');
   if (c) {
     const k = byKey[c.dataset.chk], e = entry(k.w.id, `${k.di}-${k.si}`);
@@ -407,8 +409,9 @@ function goToWeek(wi) {
 // så tilbage-knappen virker uden ekstra kode. Et ugelink (#u12) åbner kalenderen ved den uge, og en ukendt hash viser I dag.
 // Hver fane er en <section class="view" id="<token>">; kun den aktive er synlig (hidden).
 let route = null;
-function applyRoute() {
-  const { route: next, week } = parseRoute(location.hash, weeks.length);
+// forced: { route, week } når hashen ikke kunne sættes (fx i en sandkasse, hvor adresselinjen er låst): så vises fanen alligevel.
+function applyRoute(forced) {
+  const { route: next, week } = forced || parseRoute(location.hash, weeks.length);
   if (week !== null) selectWeek(week);
   const changed = next !== route;
   route = next;
@@ -425,12 +428,14 @@ function applyRoute() {
   if (next === 'analyse') drawPerf();
   if (next === 'kalender') scrollGridTo(selIdx, false);
 }
-// Skift fane fra koden (knapper): sæt hashen og vis fanen med det samme (hashchange kommer bagefter og er så en tom handling).
-function navigate(name) {
-  if (location.hash !== '#' + name) location.hash = name;
-  applyRoute();
+// Skift fane fra koden og fra links (<a href="#kost">): sæt hashen (så tilbage-knappen virker) og vis fanen med det samme.
+// hashchange kommer bagefter og er så en tom handling. Kan hashen ikke sættes, vises fanen alligevel.
+function goHash(hash) {
+  try { if (location.hash !== hash) location.hash = hash; } catch (e) { /* låst adresselinje */ }
+  applyRoute(location.hash === hash ? null : parseRoute(hash, weeks.length));
 }
-window.addEventListener('hashchange', applyRoute);
+const navigate = name => goHash('#' + name);
+window.addEventListener('hashchange', () => applyRoute());
 for (const b of [savemode, $('settingsBtn'), $('savemodeTop'), $('settingsTop')]) b.addEventListener('click', () => navigate('mere'));
 
 // ---- I dag ----

@@ -385,3 +385,39 @@ test('Analyse har stadig PMC-graf og timer pr. uge, og overholdelsen ligger i sa
   const analyse = SRC_HTML.slice(SRC_HTML.indexOf('<section class="view" id="analyse"'), SRC_HTML.indexOf('<section class="view" id="mere"'));
   assert.ok(analyse.includes('id="perf"') && analyse.includes('id="compliance"'));
 });
+
+// ---- Links ----
+
+const clickLink = (app, href, extra = {}) => { let prevented = false; app.doc.fire('click', { target: { closest: sel => (sel === 'a[href^="#"]' ? { getAttribute: () => href } : null) }, preventDefault: () => { prevented = true; }, ...extra }); return prevented; };
+
+test('klik på et fane- eller ugelink skifter fane og sætter hashen; modifikatortryk og midterklik overlades til browseren', () => {
+  const app = loadApp();
+  assert.equal(clickLink(app, '#kost'), true);
+  assert.deepEqual(app.views(), ['kost']);
+  assert.equal(app.location.hash, '#kost');
+  assert.equal(clickLink(app, '#u07'), true);
+  assert.deepEqual(app.views(), ['kalender']);
+  assert.equal(weekOf(app.$), '7');
+  assert.equal(app.location.hash, '#u07');
+  for (const extra of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { button: 1 }]) {
+    assert.equal(clickLink(app, '#analyse', extra), false);
+    assert.deepEqual(app.views(), ['kalender'], JSON.stringify(extra));
+  }
+  clickLink(app, '#noget-ukendt');
+  assert.deepEqual(app.views(), ['idag']);
+});
+
+test('låst adresselinje (hash kan ikke sættes): fanerne virker alligevel, og indstillingsknapperne åbner Mere', () => {
+  const app = loadApp();
+  Object.defineProperty(app.location, 'hash', { get: () => '', set: () => { throw new Error('låst'); } });
+  clickLink(app, '#analyse');
+  assert.deepEqual(app.views(), ['analyse']);
+  assert.deepEqual(current(app), ['analyse']);
+  app.$('settingsBtn').click();
+  assert.deepEqual(app.views(), ['mere']);
+  const stuck = loadApp();
+  Object.defineProperty(stuck.location, 'hash', { get: () => '', set: () => {} }); // ignoreres uden fejl
+  clickLink(stuck, '#u12');
+  assert.deepEqual(stuck.views(), ['kalender']);
+  assert.equal(weekOf(stuck.$), '12');
+});

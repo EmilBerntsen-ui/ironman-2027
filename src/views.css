@@ -7,7 +7,7 @@
 [hidden] { display: none !important; }
 body { padding-left: var(--rail); }
 .wrap { padding-top: 12px; padding-bottom: calc(var(--bar-b) + 24px); gap: 20px; }
-.view { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.view { display: flex; flex-direction: column; gap: 16px; min-width: 0; scroll-margin-top: 120px; } /* hash-tokenet er også id'et: stort margin-top, så browserens spring til #kost mv. aldrig ruller siden eller gemmer toppen bag topbjælken */
 .view > h2, .view .sec-head h2 { font-size: 24px; }
 
 /* ---- Tabbar: bund på telefon og tablet, venstre side på brede skærme ---- */
@@ -53,12 +53,12 @@ body { padding-left: var(--rail); }
 .today-list { display: flex; flex-direction: column; gap: 12px; }
 
 /* Dagens pas: et stort kort pr. pas, med samme overholdelsesfarver som kalenderen */
-.tc { --c: var(--rest); background: var(--surface); border: 1px solid var(--line); border-left: 6px solid var(--c); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tc { background: var(--surface); border: 1px solid var(--line); border-left: 6px solid var(--c, var(--rest)); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .tc.st-done { background: color-mix(in srgb, var(--ok) 12%, var(--surface)); border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); border-left-color: var(--c); }
 .tc.st-off { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); border-left-color: var(--c); }
 .tc.rest { background: transparent; border-style: dashed; border-left-style: solid; }
 .tc-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.tc-sport { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--c); }
+.tc-sport { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--c, var(--muted)); }
 .tc-state { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 2px 7px; border-radius: 3px; background: var(--sunk); color: var(--muted); white-space: nowrap; }
 .tc.st-done .tc-state { background: var(--ok); color: var(--surface); }
 .tc.st-off .tc-state { background: var(--warn); color: var(--ink); }
@@ -95,8 +95,8 @@ body { padding-left: var(--rail); }
 .panel .bar { flex: none; }
 .wp-note { margin: 0; font-size: 14px; color: var(--muted); }
 .wp-link { color: var(--ink); font-size: 14px; text-underline-offset: 2px; min-height: 24px; align-self: flex-start; }
-.nk { --c: var(--rest); display: flex; flex-direction: column; gap: 2px; text-align: left; width: 100%; background: var(--sunk); border: 0; border-left: 4px solid var(--c); border-radius: 5px; padding: 10px 12px; cursor: pointer; min-height: 44px; }
-.nk:hover { background: color-mix(in srgb, var(--c) 10%, var(--sunk)); }
+.nk { display: flex; flex-direction: column; gap: 2px; text-align: left; width: 100%; background: var(--sunk); border: 0; border-left: 4px solid var(--c, var(--rest)); border-radius: 5px; padding: 10px 12px; cursor: pointer; min-height: 44px; }
+.nk:hover { background: color-mix(in srgb, var(--c, var(--rest)) 10%, var(--sunk)); }
 .nk-t { font-weight: 600; font-size: 16px; }
 .nk-m { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .nk-p { font-family: var(--mono); font-size: 12px; }
@@ -162,6 +162,8 @@ body { padding-left: var(--rail); }
 .cp b { font-family: var(--mono); font-size: 12px; font-weight: 500; min-width: 3.2em; text-align: right; }
 
 /* ---- Kalender ---- */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+#kalender .sec-head { justify-content: flex-end; border-bottom: 0; padding-bottom: 0; margin-bottom: -6px; } /* overskriften står i topbjælken, så her er kun uge-knapperne */
 .agenda { scroll-margin-top: 72px; }
 .gscroll { max-height: min(78vh, 920px); }
 
