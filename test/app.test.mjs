@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
 import { bundleJs } from '../build/bundle.mjs';
 import { plan } from '../src/plan.js';
 import { fakeDocument, fakeWindow, memoryStorage } from './dom-harness.mjs';
@@ -240,4 +241,209 @@ test('manuelt pas får ikke Strava-felter ved redigering, og fjernes afkrydsning
   const tomb = JSON.parse(s.storage.getItem('im2027-progress-v2')).weeks.u02['4-0'];
   assert.equal(tomb.done, false);
   for (const k of ['src', 'extId', 'dist', 'hr', 'min']) assert.ok(!(k in tomb), k);
+});
+
+// ---- Fart: anbefalet i arket og på kortene, faktisk pace i loggen ----
+
+const planWeeks = plan();
+const keyOf = pred => { for (const w of planWeeks) for (let d = 0; d < 7; d++) for (let i = 0; i < w.days[d].length; i++) if (pred(w.days[d][i], w)) return `${w.id}-${d}-${i}`; return null; };
+const sessionAt = key => { const [id, d, i] = key.split('-'); return planWeeks.find(w => w.id === id).days[+d][+i]; };
+const stored = (app, key) => { const [id, d, i] = key.split('-'); return JSON.parse(app.storage.getItem('im2027-progress-v2')).weeks[id]?.[`${d}-${i}`]; };
+const appWithAt = (key, entry) => { const [id, d, i] = key.split('-'); return loadApp({ storage: memoryStorage({ 'im2027-progress-v2': JSON.stringify({ v: 2, weeks: { [id]: { [`${d}-${i}`]: entry } } }) }) }); };
+const DONE = { done: true, updatedAt: '2026-11-06T12:35:00.000Z', at: '2026-11-06T11:30:00.000Z' };
+const submitSheet = app => app.$('sheet').dispatch('submit');
+const fill = (app, { pace, min, done = true }) => {
+  if (pace !== undefined) app.$('fPace').value = pace;
+  if (min !== undefined) app.$('fMin').value = min;
+  app.$('fDone').checked = done;
+  submitSheet(app);
+};
+
+const K = {
+  runMain: keyOf(s => s.s === 'run' && s.z === 'easy' && s.main === 'thr'),
+  runEasy: keyOf((s, w) => w.id === 'u02' && s.s === 'run' && s.z === 'z2' && !s.main),
+  swimEasy: keyOf(s => s.s === 'swim' && s.z === 'easy' && !s.main),
+  bikeOpt: keyOf(s => s.s === 'bike' && s.z === 'z2' && !s.main && s.ind === 'opt'),
+  bikeIndoor: keyOf(s => s.s === 'bike' && s.ind === true),
+  str: keyOf(s => s.s === 'str'),
+  rest: keyOf(s => s.s === 'rest'),
+  ironman: keyOf(s => s.t === 'IRONMAN'),
+  test: keyOf(s => s.t === 'Cykeltest'),
+};
+
+test('arket viser "Anbefalet: …" i stedet for intensitet: hovedsæt, indendørs, test, triatlon-løb; ingen fart for styrke og hvile', () => {
+  for (const [name, key] of Object.entries(K)) assert.ok(key, name);
+  const html = key => { const app = loadApp(); openSheetOf(app, key); return app.$('sh').innerHTML; };
+  const run = html(K.runMain);
+  assert.match(run, /<div class="sh-rec">Anbefalet: 6:45–7:15 \/km · hovedsæt 5:40–5:50 \/km<\/div>/);
+  assert.doesNotMatch(run, /Intensitet/);
+  assert.ok(run.indexOf('Est. TSS') < run.indexOf('sh-rec') && run.indexOf('sh-rec') < run.indexOf('<form'));
+  assert.match(html(K.bikeOpt), /Anbefalet: 22–25 km\/t · indendørs: efter følelse og kadence</);
+  const indoor = html(K.bikeIndoor);
+  assert.match(indoor, /<div class="sh-rec">Anbefalet: efter følelse og kadence<\/div>/);
+  assert.doesNotMatch(indoor, /km\/t/);
+  assert.doesNotMatch(indoor, /id="fPace"/, 'km/t er meningsløst indendørs: ingen pace-felt');
+  assert.match(html(K.test), /Anbefalet: hård og jævn indsats/);
+  const im = html(K.ironman);
+  assert.match(im, /Anbefalet: svøm 2:15–2:20 \/100 m · cykel 24–26 km\/t · løb 6:20–6:35 \/km/);
+  assert.doesNotMatch(im, /id="fPace"/, 'tre grene: ingen samlet pace');
+  const str = html(K.str);
+  assert.doesNotMatch(str, /Anbefalet|id="fPace"/);
+  assert.match(str, /Est\. TSS/);
+  assert.doesNotMatch(html(K.rest), /Anbefalet|Est\. TSS|<form/);
+});
+
+test('pace-feltet: løb min:sek pr. km, svøm min:sek pr. 100 m, cykel km/t; hovedsætpas spørger efter hovedsættets pace', () => {
+  const field = key => { const app = loadApp(); openSheetOf(app, key); return /<label class="field">(Faktisk pace[^<]*)<input type="text" id="fPace" inputmode="decimal"[^>]*placeholder="([^"]*)"/.exec(app.$('sh').innerHTML)?.slice(1); };
+  assert.deepEqual(field(K.runEasy), ['Faktisk pace (min:sek pr. km)', '5:30']);
+  assert.deepEqual(field(K.swimEasy), ['Faktisk pace (min:sek pr. 100 m)', '2:10']);
+  assert.deepEqual(field(K.bikeOpt), ['Faktisk pace (km/t)', '27,5']);
+  assert.deepEqual(field(K.runMain), ['Faktisk pace i hovedsættet (min:sek pr. km)', '5:30']);
+  assert.equal(field(K.str), undefined);
+});
+
+test('log pace: "6.55" gemmes som 415 sek./km, vises i arket og på kortet og sammenlignes med zonen', () => {
+  const app = loadApp({ now: '2026-11-02T10:00:00' }); // uge 2 vises i dagslisten
+  assert.match(app.$('agenda').innerHTML, /<span class="pz">6:45–7:15 \/km<\/span><span class="pa"><\/span>/, 'anbefalet fart på kortet, endnu ingen faktisk');
+  openSheetOf(app, K.runEasy);
+  fill(app, { pace: '6.55', min: '30' });
+  const e = stored(app, K.runEasy);
+  assert.equal(e.pace, 415);
+  assert.equal(e.min, 30);
+  assert.equal(e.done, true);
+  assert.match(app.$('agenda').innerHTML, /<span class="pa">Faktisk 6:55 \/km · i zonen<\/span>/);
+  openSheetOf(app, K.runEasy);
+  const html = app.$('sh').innerHTML;
+  assert.match(html, /<p class="desc sh-pace">Faktisk pace: 6:55 \/km · i zonen<\/p>/);
+  assert.match(html, /id="fPace"[^>]*value="6:55"/);
+  assert.ok(html.indexOf('sh-rec') < html.indexOf('sh-pace') && html.indexOf('sh-pace') < html.indexOf('<form'));
+  // hurtigere, i zonen, langsommere
+  for (const [txt, word] of [['6:00', 'hurtigere end anbefalet'], ['7:15', 'i zonen'], ['6:45', 'i zonen'], ['7:16', 'langsommere end anbefalet'], ['9:00', 'langsommere end anbefalet']]) {
+    openSheetOf(app, K.runEasy);
+    fill(app, { pace: txt });
+    openSheetOf(app, K.runEasy);
+    assert.match(app.$('sh').innerHTML, new RegExp(`sh-pace">Faktisk pace: [\\d:]+ /km · ${word}<`), `${txt}: ${word}`);
+  }
+  // pace sat på et pas ændrer ikke farven (st-*), som kun afhænger af varigheden
+  assert.doesNotMatch(app.$('agenda').innerHTML.split(`data-key="${K.runEasy}"`)[0].split('class="card').pop(), /st-miss/);
+});
+
+test('log pace: svøm mm:ss og cykel km/t (komma og punktum), og pace på et pas uden hovedsæt sammenlignes med pasets zone', () => {
+  const app = loadApp();
+  openSheetOf(app, K.swimEasy);
+  fill(app, { pace: '2:25' });
+  assert.equal(stored(app, K.swimEasy).pace, 145);
+  openSheetOf(app, K.swimEasy);
+  assert.match(app.$('sh').innerHTML, /Faktisk pace: 2:25 \/100 m · i zonen/);
+  openSheetOf(app, K.bikeOpt);
+  fill(app, { pace: '27,5' });
+  assert.equal(stored(app, K.bikeOpt).pace, 27.5);
+  openSheetOf(app, K.bikeOpt);
+  assert.match(app.$('sh').innerHTML, /Faktisk pace: 27,5 km\/t · hurtigere end anbefalet/);
+  openSheetOf(app, K.bikeOpt);
+  fill(app, { pace: '23.2 km/t' });
+  assert.equal(stored(app, K.bikeOpt).pace, 23.2);
+  openSheetOf(app, K.bikeOpt);
+  assert.match(app.$('sh').innerHTML, /Faktisk pace: 23,2 km\/t · i zonen/);
+  openSheetOf(app, K.bikeOpt);
+  fill(app, { pace: '19' });
+  openSheetOf(app, K.bikeOpt);
+  assert.match(app.$('sh').innerHTML, /19 km\/t · langsommere end anbefalet/);
+});
+
+test('log pace: en hovedsætpace sammenlignes med hovedsættets zone', () => {
+  const app = loadApp();
+  // pasets hovedsæt er tærskel (5:40–5:50), mens opvarmningen er rolig (6:45–7:15): en hovedsætpace på 6:30 er for langsom
+  for (const [txt, word] of [['5:45', 'i zonen'], ['5:30', 'hurtigere end anbefalet'], ['6:30', 'langsommere end anbefalet']]) {
+    openSheetOf(app, K.runMain);
+    fill(app, { pace: txt });
+    openSheetOf(app, K.runMain);
+    assert.match(app.$('sh').innerHTML, new RegExp(`Faktisk pace: ${txt} /km · ${word}<`), txt);
+  }
+});
+
+test('log pace: ugyldig pace afviser gemningen med en besked; tom pace gemmer uden pace og fjerner en gammel; test får pace uden vurdering', () => {
+  const app = loadApp();
+  openSheetOf(app, K.runEasy);
+  for (const bad of ['7:99', 'hurtig', '5:3', '0:30', '99']) {
+    fill(app, { pace: bad, min: '30' });
+    assert.match(app.$('fMsg').textContent, /Skriv pace som min:sek pr\. km, fx 5:30\./, bad);
+    assert.equal(app.storage.getItem('im2027-progress-v2'), null, `intet gemt: ${bad}`);
+  }
+  fill(app, { pace: '7:00' });
+  assert.equal(stored(app, K.runEasy).pace, 420);
+  openSheetOf(app, K.runEasy);
+  fill(app, { pace: '', min: '40' });
+  const e = stored(app, K.runEasy);
+  assert.equal(e.min, 40);
+  assert.ok(!('pace' in e), 'tømt felt fjerner pace');
+  openSheetOf(app, K.bikeOpt);
+  fill(app, { pace: 'xx' });
+  assert.match(app.$('fMsg').textContent, /Skriv farten i km\/t, fx 27,5\./);
+  // en test
+  openSheetOf(app, K.test);
+  fill(app, { pace: '31,2' });
+  assert.equal(stored(app, K.test).pace, 31.2);
+  openSheetOf(app, K.test);
+  const html = app.$('sh').innerHTML;
+  assert.match(html, /<p class="desc sh-pace">Faktisk pace: 31,2 km\/t<\/p>/, 'ingen vurdering af en test');
+});
+
+test('at skrive en pace sætter "Gennemført"; et pas med kun pace åbner arket i stedet for at blive fjernet ved klik på cirklen', () => {
+  const app = loadApp();
+  openSheetOf(app, K.runEasy);
+  app.$('fDone').checked = false;
+  app.$('sheet').dispatch('input', { target: { id: 'fPace', value: '6:50' } });
+  assert.equal(app.$('fDone').checked, true);
+  const only = appWithAt(K.runEasy, { ...DONE, pace: 410 });
+  only.$('sheet').open = false;
+  check(only, K.runEasy);
+  assert.equal(only.$('sheet').open, true, 'har detaljer: åbn i stedet for at slette');
+  assert.ok(stored(only, K.runEasy).done);
+});
+
+test('Strava-pas uden pace: farten regnes ud af distance og tid og vises som ⌀ uden at blive gemt', async () => {
+  const entry = { ...DONE, dev: 'strava', min: 55, src: 'strava', extId: '12345678901', dist: 8000 };
+  const app = appWithAt(K.runEasy, entry);
+  await settle();
+  openSheetOf(app, K.runEasy);
+  const html = app.$('sh').innerHTML;
+  assert.match(html, /<p class="desc sh-pace">Gennemsnitsfart \(beregnet ud fra distance og tid\): 6:53 \/km · i zonen<\/p>/);
+  assert.match(html, /id="fPace"[^>]*value=""/, 'det beregnede tal sættes ikke i feltet');
+  assert.ok(html.indexOf('sh-pace') < html.indexOf('sh-strava'));
+  assert.match(app.$('agenda').innerHTML, /⌀ 6:53 \/km · i zonen/);
+  fill(app, {}); // gem uden at røre ved noget
+  const saved = stored(app, K.runEasy);
+  assert.ok(!('pace' in saved), 'beregnet fart gemmes ikke');
+  assert.equal(saved.dist, 8000);
+  assert.equal(saved.src, 'strava');
+  // selvindtastet pace slår den beregnede og bevares sammen med Strava-felterne
+  openSheetOf(app, K.runEasy);
+  fill(app, { pace: '6:30' });
+  const edited = stored(app, K.runEasy);
+  assert.equal(edited.pace, 390);
+  assert.equal(edited.dist, 8000);
+  assert.equal(edited.extId, '12345678901');
+  openSheetOf(app, K.runEasy);
+  assert.match(app.$('sh').innerHTML, /Faktisk pace: 6:30 \/km · hurtigere end anbefalet/);
+});
+
+test('beregnet fart vurderes ikke for pas med hovedsæt (gennemsnittet er blandet med opvarmning), og aldrig for triatlon-løb eller indendørs cykel', () => {
+  const sh = (key, extra) => { const app = appWithAt(key, { ...DONE, dev: 'strava', src: 'strava', extId: '1', ...extra }); openSheetOf(app, key); return app.$('sh').innerHTML; };
+  assert.match(sh(K.runMain, { min: 50, dist: 8000 }), /sh-pace">Gennemsnitsfart \(beregnet ud fra distance og tid\): 6:15 \/km<\/p>/);
+  assert.doesNotMatch(sh(K.ironman, { min: 600, dist: 180000 }), /sh-pace/);
+  assert.doesNotMatch(sh(K.bikeIndoor, { min: 60, dist: 30000 }), /sh-pace/);
+  assert.doesNotMatch(sh(K.runEasy, { min: 55 }), /sh-pace/, 'uden distance ingen fart');
+  assert.doesNotMatch(sh(K.runEasy, { min: 5, dist: 100000 }), /sh-pace/, 'urimelig fart');
+});
+
+test('zoneguiden regnes ud fra grundtallene og taler om fart, ikke watt', () => {
+  const app = loadApp();
+  const table = app.$('zones').innerHTML;
+  for (const x of ['<th>Løb /km</th>', '<th>Svøm /100 m</th>', '<th>Cykel km/t</th>', '6:20–6:35', '5:40–5:50', '2:08–2:12', '26–27,5', 'under 22', '<td>IM-fart</td>']) assert.ok(table.includes(x), x);
+  assert.ok(!/watt|ftp/i.test(table));
+  const note = app.$('zonesNote').textContent;
+  for (const x of ['5:45 /km', '2:10 /100 m', '29 km/t', 'testugen', 'efter følelse og kadence']) assert.ok(note.includes(x), x);
+  assert.ok(!/watt|ftp/i.test(note));
+  assert.ok(!/watt|ftp/i.test(readFileSync(new URL('../src/app.html', import.meta.url), 'utf8')));
 });

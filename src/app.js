@@ -1,6 +1,6 @@
 // ---- App: kalender, detaljevisning, PMC-graf og gemning ----
 // Forudsætter at disse er inlinet før denne fil: plan.js (plan, PH, START, RACE, TUNEUP, addDays, tss, pmc, plannedDailyTss),
-// progress.js (isDone, sessionSig), store/local.js (LocalStore), settings.js (mountSettings) og BUILD fra bundleren.
+// progress.js (isDone, sessionSig), pace.js (anbefalet og faktisk fart), store/local.js (LocalStore), settings.js (mountSettings) og BUILD fra bundleren.
 // ArtifactDbStore (kun artifact-målet) og GistStore (kun site-målet) findes kun i deres eget mål: brug typeof-vagt.
 const DAYS = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
 const DAYS_LONG = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
@@ -63,11 +63,24 @@ function paintHeader() {
 paintHeader();
 
 // ---- Kort (workout card) ----
+// Faktisk fart for et gennemført pas (selvindtastet, eller beregnet af distance og tid fra Strava) og hvordan den ligger i forhold til zonen.
+// Kort tekst til kortene, lang til arket. null uden fart. Zonefarven (st-*) afhænger aldrig af farten, kun af varigheden.
+function paceSummary(s, e) {
+  const a = e && actualPace(s, e);
+  if (!a) return null;
+  const val = formatPaceUnit(a.sport, a.value), cmp = a.cmp ? ` · ${PACE_CMP_TEXT[a.cmp]}` : '';
+  return a.derived
+    ? { card: `⌀ ${val}${cmp}`, sheet: `Gennemsnitsfart (beregnet ud fra distance og tid): ${val}${cmp}` }
+    : { card: `Faktisk ${val}${cmp}`, sheet: `Faktisk pace: ${val}${cmp}` };
+}
+const cardPace = (wk, di, si, s) => { const p = paceSummary(s, entry(wk, `${di}-${si}`)); return p ? p.card : ''; };
 function cardHtml(w, wi, di, si, s) {
   const key = `${w.id}-${di}-${si}`;
   const chk = s.s === 'rest' ? '' : `<button class="chk" data-chk="${key}" aria-label="Markér ${esc(s.t)} som gennemført"></button>`;
+  const pz = paceCompact(s);
   return `<div class="card c-${s.s} ${s.s} st-${status(wi, di, si, s)}" data-key="${key}">` +
-    `<button class="open" data-open="${key}"><span class="t">${esc(s.t)}</span>${s.m ? `<span class="m">${dur(s.m)}</span>` : ''}<span class="d">${esc(s.d)}</span></button>${chk}</div>`;
+    `<button class="open" data-open="${key}"><span class="t">${esc(s.t)}</span>${s.m ? `<span class="m">${dur(s.m)}</span>` : ''}` +
+    `${pz ? `<span class="pz">${esc(pz)}</span>` : ''}<span class="pa">${esc(cardPace(w.id, di, si, s))}</span><span class="d">${esc(s.d)}</span></button>${chk}</div>`;
 }
 const pills = (w, wi) => `<span class="pill k-${w.k}">${KIND[w.k]}</span><span class="pill">${PH[w.ph].name}</span>` +
   (w.event ? `<span class="pill evt">${esc(w.event[0])}</span>` : '') +
@@ -130,6 +143,8 @@ function refresh() {
   document.querySelectorAll('.card[data-key]').forEach(el => {
     const k = byKey[el.dataset.key]; if (!k) return;
     el.className = el.className.replace(/\bst-\w+/, 'st-' + status(k.wi, k.di, k.si, k.s));
+    const pa = el.querySelector('.pa');
+    if (pa) pa.textContent = cardPace(k.w.id, k.di, k.si, k.s);
   });
   weeks.forEach(w => { const el = document.querySelector(`[data-sum="${w.id}"]`); if (el) el.innerHTML = sumHtml(w); });
   buildAgenda();
@@ -179,6 +194,12 @@ function setEntry(key, val) {
 // ---- Detaljevisning ----
 const sheet = $('sheet');
 const STRAVA_ID = /^\d{1,20}$/;
+// Faktisk pace i logformularen: løb mm:ss pr. km, svøm mm:ss pr. 100 m, cykel km/t (tolerant indtastning, se parsePace i pace.js).
+const PACE_FIELD = {
+  run: { label: 'Faktisk pace', unit: 'min:sek pr. km', ph: '5:30', err: 'Skriv pace som min:sek pr. km, fx 5:30.' },
+  swim: { label: 'Faktisk pace', unit: 'min:sek pr. 100 m', ph: '2:10', err: 'Skriv pace som min:sek pr. 100 m, fx 2:10.' },
+  bike: { label: 'Faktisk pace', unit: 'km/t', ph: '27,5', err: 'Skriv farten i km/t, fx 27,5.' },
+};
 // Importeret fra Strava: én linje under faktaboksene (docs/strava.md §5) og et link til den første aktivitet. Kun tal og esc(), aldrig rå tekst.
 function stravaHtml(e) {
   const parts = ['Fra Strava'];
@@ -195,10 +216,16 @@ function openSheet(key) {
   const e = entry(w.id, `${k.di}-${k.si}`);
   rpe = e && e.rpe ? e.rpe : null;
   const date = addDays(w.start, di);
-  const facts = s.s === 'rest' ? '' : `<div class="sh-facts"><div><small>Planlagt</small><b class="num">${dur(s.m)}</b></div><div><small>Est. TSS</small><b class="num">${tss(s)}</b></div><div><small>Intensitet</small><b class="num">${s.s === 'str' ? '–' : intensity(s).toLocaleString('da-DK')}</b></div></div>`;
+  const rec = paceText(s);
+  const facts = s.s === 'rest' ? '' : `<div class="sh-facts"><div><small>Planlagt</small><b class="num">${dur(s.m)}</b></div><div><small>Est. TSS</small><b class="num">${tss(s)}</b></div>${rec ? `<div class="sh-rec">${esc(rec)}</div>` : ''}</div>`;
+  const ps = paceSummary(s, e);
+  const psport = paceSport(s);
+  const pf = psport && PACE_FIELD[psport];
+  const paceField = pf ? `<label class="field">${pf.label}${s.main ? ' i hovedsættet' : ''} (${pf.unit})<input type="text" id="fPace" inputmode="decimal" autocomplete="off" maxlength="12" placeholder="${pf.ph}" value="${e && typeof e.pace === 'number' ? formatPace(psport, e.pace) : ''}"></label>` : '';
   const form = s.s === 'rest' ? '' : `<form id="logf">
       <label class="chkrow"><input type="checkbox" id="fDone"${e ? ' checked' : ''}> Gennemført</label>
       <label class="field">Faktisk varighed (min)<input type="number" id="fMin" inputmode="numeric" min="0" max="900" step="1" placeholder="${s.m}" value="${e && typeof e.min === 'number' ? e.min : ''}"></label>
+      ${paceField}
       <div class="field"><span id="rpeLbl">RPE (1 = meget let, 10 = maks)</span><div class="rpe" role="group" aria-labelledby="rpeLbl">${Array.from({ length: 10 }, (_, i) => `<button type="button" data-rpe="${i + 1}" aria-pressed="${rpe === i + 1}">${i + 1}</button>`).join('')}</div></div>
       <label class="field">Note<textarea id="fNote" maxlength="1000" placeholder="Hvordan gik det?">${e && e.note ? esc(e.note) : ''}</textarea></label>
       <div class="msg" id="fMsg"></div>
@@ -207,7 +234,7 @@ function openSheet(key) {
   const sh = $('sh');
   sh.className = `sh c-${s.s}`;
   sh.innerHTML = `<div class="sh-top"><div><div class="sh-sport">${SPORT[s.s]}</div><h3 id="shTitle">${esc(s.t)}</h3><div class="when">${DAYS_LONG[di]} ${fmt(date)} ${date.getFullYear()} · Uge ${w.n} · ${PH[w.ph].name}</div></div><button class="x" id="fClose" aria-label="Luk">×</button></div>
-    <p class="desc">${esc(s.d)}</p>${facts}${e && e.src === 'strava' ? stravaHtml(e) : ''}${form}`;
+    <p class="desc">${esc(s.d)}</p>${facts}${ps ? `<p class="desc sh-pace">${esc(ps.sheet)}</p>` : ''}${e && e.src === 'strava' ? stravaHtml(e) : ''}${form}`;
   if (!sheet.open) sheet.showModal();
 }
 sheet.addEventListener('click', ev => {
@@ -219,7 +246,7 @@ sheet.addEventListener('click', ev => {
     if (rpe) $('fDone').checked = true;
   }
 });
-sheet.addEventListener('input', ev => { if (ev.target.id === 'fMin' || ev.target.id === 'fNote') { if (ev.target.value) $('fDone').checked = true; } });
+sheet.addEventListener('input', ev => { if (ev.target.id === 'fMin' || ev.target.id === 'fNote' || ev.target.id === 'fPace') { if (ev.target.value) $('fDone').checked = true; } });
 sheet.addEventListener('submit', ev => {
   ev.preventDefault();
   const k = byKey[openKey]; if (!k) return;
@@ -227,9 +254,13 @@ sheet.addEventListener('submit', ev => {
   if (!$('fDone').checked) { setEntry(openKey, null); sheet.close(); return; }
   const raw = $('fMin').value.trim(), min = raw === '' ? null : Math.round(Number(raw));
   if (raw !== '' && !(min >= 0 && min <= 900)) { $('fMsg').textContent = 'Skriv varigheden i hele minutter (0–900).'; return; }
+  const sport = paceSport(k.s), rawPace = sport ? $('fPace').value.trim() : '';
+  const pace = rawPace === '' ? null : parsePace(sport, rawPace);
+  if (rawPace !== '' && pace === null) { $('fMsg').textContent = PACE_FIELD[sport].err; return; }
   const note = $('fNote').value.trim();
   const val = { at: (prev && prev.at) || new Date().toISOString() };
   if (min !== null) val.min = min;
+  if (pace !== null) val.pace = pace;
   if (rpe) val.rpe = rpe;
   if (note) val.note = note;
   if (prev && prev.src === 'strava') { // en redigeret Strava-post bliver ved med at høre til Strava; brugerens min/RPE/note vinder
@@ -246,7 +277,7 @@ document.addEventListener('click', ev => {
   const c = ev.target.closest('[data-chk]');
   if (c) {
     const k = byKey[c.dataset.chk], e = entry(k.w.id, `${k.di}-${k.si}`);
-    if (e && (e.min != null || e.rpe || e.note)) openSheet(c.dataset.chk); // har detaljer: åbn i stedet for at slette
+    if (e && (e.min != null || e.rpe || e.note || e.pace != null)) openSheet(c.dataset.chk); // har detaljer: åbn i stedet for at slette
     else setEntry(c.dataset.chk, e ? null : { at: new Date().toISOString() });
     return;
   }
@@ -373,6 +404,15 @@ function rollDay() {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') rollDay(); });
 window.addEventListener('pageshow', rollDay);
 window.addEventListener('focus', rollDay);
+
+// ---- Guide: zonetabellen regnes ud fra grundtallene i pace.js, så den altid passer til fartene i planen ----
+function paintZones() {
+  const cell = v => `<td>${esc(v)}</td>`;
+  $('zones').innerHTML = '<tr><th></th><th>Løb /km</th><th>Svøm /100 m</th><th>Cykel km/t</th></tr>' +
+    guideRows().map(r => `<tr><td>${esc(r.name)}</td>${cell(r.run)}${cell(r.swim)}${cell(r.bike)}</tr>`).join('');
+  $('zonesNote').textContent = `Z1–Z2 er snakketempo: løb under 89 % af tærskelpuls. Z4 er hårdt, kun korte ord. Zonerne regnes ud fra tre grundtal: tærskelløb ${formatPaceUnit('run', BASELINES.run)}, CSS ${formatPaceUnit('swim', BASELINES.swim)} og cykeltærskel ${formatPaceUnit('bike', BASELINES.bike)}. De er forsigtige startværdier og opdateres efter testugen i uge 5. Indendørs (spinner) køres cyklen ${INDOOR_TEXT} i stedet for km/t.`;
+}
+paintZones();
 
 // ---- Start ----
 buildGrid();
