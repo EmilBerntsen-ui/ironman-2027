@@ -72,6 +72,9 @@ test('a. sprunget over: ≥ 2 planlagte pas ikke logget de seneste 7 hele dage �
   assert.match(a.reason, /^2 af 6 planlagte pas de seneste 7 dage er ikke logget \(Tor Roligt løb, Ons Rolig svømning\)\.$/);
   assert.match(a.text, /Spring de sprungne pas over.*Du skal ikke indhente dem\./);
   assert.doesNotMatch(a.text, /Flyt/);
+  // flere end 3 sprunget: de 3 seneste nævnes, og en indledende "…" viser, at der er flere før dem
+  const many = logPlanned({}, 3, 9, ['3-0', '5-0', '6-0', '8-0']);
+  assert.match(advise(many, 10)[0].reason, /^4 af 6 planlagte pas de seneste 7 dage er ikke logget \(…, Lør Lang cykeltur, Søn Langt løb, Tir Løbeintervaller\)\.$/);
 });
 
 test('a. vinduet er de 7 hele dage før i dag: dag −8 og i dag tæller ikke, dag −7 gør', () => {

@@ -71,7 +71,7 @@ function missedRule(days, todayIdx, weeks) {
   }
   if (missed.length < 2) return null;
   const list = missed.slice(-3).map(m => `${DAY_SHORT[m.di]} ${m.s.t}`).join(', ');
-  const reason = `${missed.length} af ${plannedAll.length} planlagte pas de seneste 7 dage er ikke logget (${list}${missed.length > 3 ? ', …' : ''}).`;
+  const reason = `${missed.length} af ${plannedAll.length} planlagte pas de seneste 7 dage er ikke logget (${missed.length > 3 ? '…, ' : ''}${list}).`;
   let text = 'Spring de sprungne pas over, og fortsæt med dagens pas som planlagt. Du skal ikke indhente dem.';
   const long = [...missed].reverse().find(m => isLongSession(m.s));
   if (missed.length >= 3 && long) {
