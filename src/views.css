@@ -1,0 +1,62 @@
+/* Faner: bundmenu (tabbar), slank topbjælke og de fem visninger. Bruger farvevariablerne fra styles.css, så lys/mørk følger med. */
+:root {
+  --tabbar-h: 58px;
+  --bar-b: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px)); /* højden af menuen i bunden, inkl. sikkert område */
+  --rail: 0px;                                                       /* bredden af menuen i siden (kun brede skærme) */
+}
+[hidden] { display: none !important; }
+body { padding-left: var(--rail); }
+.wrap { padding-top: 12px; padding-bottom: calc(var(--bar-b) + 24px); gap: 20px; }
+.view { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.view > h2, .view .sec-head h2 { font-size: 24px; }
+
+/* ---- Tabbar: bund på telefon og tablet, venstre side på brede skærme ---- */
+.tabbar { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; display: flex; background: var(--surface); border-top: 1px solid var(--line);
+  padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.tab { flex: 1 1 0; min-width: 0; min-height: var(--tabbar-h); position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  color: var(--muted); text-decoration: none; font-size: 12px; font-weight: 600; line-height: 1.1; -webkit-tap-highlight-color: transparent; }
+.tab svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tab:hover { color: var(--ink); }
+.tab[aria-current="page"], .tab[aria-current="page"]:hover { color: var(--accent); }
+.tab[aria-current="page"]::before { content: ""; position: absolute; top: 0; left: 24%; right: 24%; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 10px; }
+@media (min-width: 900px) {
+  :root { --rail: calc(88px + env(safe-area-inset-left, 0px)); --bar-b: 0px; }
+  .tabbar { top: 0; right: auto; width: var(--rail); flex-direction: column; justify-content: flex-start; gap: 4px; padding: 16px 0 0 env(safe-area-inset-left, 0px); border-top: 0; border-right: 1px solid var(--line); }
+  .tab { flex: 0 0 auto; min-height: 72px; }
+  .tab[aria-current="page"]::before { top: 20%; bottom: 20%; left: 0; right: auto; width: 3px; height: auto; border-radius: 0 3px 3px 0; }
+}
+
+/* ---- Slank topbjælke (alle faner undtagen I dag) ---- */
+.topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px;
+  margin-top: -12px; padding: calc(6px + env(safe-area-inset-top, 0px)) 0 6px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.top-title { font-size: 30px; font-weight: 800; line-height: 1; text-transform: uppercase; letter-spacing: .01em; }
+.top-tools { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.top-tools .savemode { min-width: 0; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 12px 6px; }
+.btn.icon-btn { width: 44px; height: 44px; min-height: 44px; padding: 0; display: inline-grid; place-items: center; border-color: transparent; background: none; color: var(--muted); }
+.btn.icon-btn:hover { color: var(--ink); border-color: var(--line); }
+.icon-btn svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Tomme monteringspunkter (plan-justering og "+ Tilføj træning") fylder ikke noget, før noget tegnes i dem */
+#advice:empty, #addWorkout:empty { display: none; }
+
+/* ---- Kalender ---- */
+.agenda { scroll-margin-top: 72px; }
+.gscroll { max-height: min(78vh, 920px); }
+
+/* ---- Mere ---- */
+.more-sec { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.more-sec > h2 { font-size: 22px; border-bottom: 2px solid var(--ink); padding-bottom: 6px; }
+.more-body { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.more-body p, .more-body ul { margin: 0; font-size: 14px; color: var(--muted); }
+.more-body ul { padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.more-body b { color: var(--ink); font-weight: 600; }
+.more-body a { color: var(--ink); text-underline-offset: 2px; }
+.more-body .zones-note { font-size: 13px; }
+.more-body .ver { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.more-sec .settings.inline { min-width: 0; }
+
+@media (max-width: 719.98px) {
+  .view > h2, .view .sec-head h2 { font-size: 22px; }
+}
+@media (prefers-reduced-motion: reduce) { .tab, .btn { transition: none; } }

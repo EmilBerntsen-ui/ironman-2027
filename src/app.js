@@ -1,6 +1,7 @@
-// ---- App: kalender, detaljevisning, PMC-graf og gemning ----
+// ---- App: fem faner (I dag, Kalender, Kost, Analyse, Mere), detaljevisning, PMC-graf og gemning ----
 // Forudsætter at disse er inlinet før denne fil: plan.js (plan, PH, START, RACE, TUNEUP, addDays, tss, pmc, plannedDailyTss),
-// progress.js (isDone, sessionSig), pace.js (anbefalet og faktisk fart), nutrition.js (kost), store/local.js (LocalStore), settings.js (mountSettings) og BUILD fra bundleren.
+// progress.js (isDone, sessionSig), pace.js (anbefalet og faktisk fart), nutrition.js (kost), views.js (routing, nøglepas, overholdelse, stat-kort),
+// store/local.js (LocalStore), settings.js (mountSettings) og BUILD fra bundleren.
 // ArtifactDbStore (kun artifact-målet) og GistStore (kun site-målet) findes kun i deres eget mål: brug typeof-vagt.
 const DAYS = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
 const DAYS_LONG = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
@@ -212,7 +213,9 @@ let store = new LocalStore(); // lokal cache fra første billede; skiftes ud nå
 let detach = () => {};
 let settings = null;
 const savemode = $('savemode');
-function paintStatus(st) { savemode.textContent = st.label; savemode.dataset.state = st.state; }
+// Synk-status vises to steder, og kun ét er synligt ad gangen: i race-headeren på I dag og i den slanke topbjælke på de andre faner.
+const statusButtons = [savemode, $('savemodeTop')];
+function paintStatus(st) { for (const b of statusButtons) { b.textContent = st.label; b.dataset.state = st.state; } }
 function attach(next) {
   detach();
   store = next;
@@ -333,7 +336,11 @@ document.addEventListener('click', ev => {
     else setEntry(c.dataset.chk, e ? null : { at: new Date().toISOString() });
     return;
   }
-  if (ev.target.closest('[data-weight]')) { if (settings) settings.open({ focusWeight: true }); return; }
+  if (ev.target.closest('[data-weight]')) { // "Angiv vægt": fanen Mere med markøren i vægtfeltet (et åbent pasark lukkes først, for det dækker siden)
+    if (sheet.open) sheet.close();
+    if (settings) settings.open({ focusWeight: true });
+    return;
+  }
   const o = ev.target.closest('[data-open]');
   if (o) openSheet(o.dataset.open);
 });
@@ -348,12 +355,42 @@ $('agenda').addEventListener('touchend', e => {
   if (!touch) return; const t = e.changedTouches[0], dx = t.clientX - touch.x, dy = t.clientY - touch.y; touch = null;
   if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) { selectWeek(selIdx + (dx < 0 ? 1 : -1)); $('agenda').scrollIntoView({ block: 'start' }); }
 }, { passive: true });
+// Søjlerne i Analyse: åbn kalenderen ved den uge.
 function goToWeek(wi) {
   selectWeek(wi);
-  const target = $('grid').clientHeight ? $('grid') : $('agenda');
-  target.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
-  scrollGridTo(wi, false);
+  navigate('kalender');
 }
+
+// ---- Faner og routing ----
+// Hash-routing med plain tokens (views.js): #idag (standard), #kalender, #kost, #analyse og #mere. Tabbarens links er almindelige <a href="#…">,
+// så tilbage-knappen virker uden ekstra kode. Et ugelink (#u12) åbner kalenderen ved den uge, og en ukendt hash viser I dag.
+// Hver fane er en <section class="view" id="<token>">; kun den aktive er synlig (hidden).
+let route = null;
+function applyRoute() {
+  const { route: next, week } = parseRoute(location.hash, weeks.length);
+  if (week !== null) selectWeek(week);
+  const changed = next !== route;
+  route = next;
+  for (const r of ROUTES) {
+    $(r).hidden = r !== next;
+    if (r === next) $('tab-' + r).setAttribute('aria-current', 'page'); else $('tab-' + r).removeAttribute('aria-current');
+  }
+  $('topbar').hidden = next === 'idag';
+  $('settingsTop').hidden = next === 'mere';
+  $('topTitle').textContent = ROUTE_TITLES[next];
+  if (!changed && week === null) return;
+  if (changed && typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+  // Det der måler sig selv, kan først tegnes eller rulles, når fanen er synlig
+  if (next === 'analyse') drawPerf();
+  if (next === 'kalender') scrollGridTo(selIdx, false);
+}
+// Skift fane fra koden (knapper): sæt hashen og vis fanen med det samme (hashchange kommer bagefter og er så en tom handling).
+function navigate(name) {
+  if (location.hash !== '#' + name) location.hash = name;
+  applyRoute();
+}
+window.addEventListener('hashchange', applyRoute);
+for (const b of [savemode, $('settingsBtn'), $('savemodeTop'), $('settingsTop')]) b.addEventListener('click', () => navigate('mere'));
 
 // ---- Præstationsgraf (SVG) ----
 const plannedTss = plannedDailyTss(weeks);
@@ -376,7 +413,9 @@ function actualPmc() {
 }
 let lastW = 0;
 function drawPerf() {
-  const box = $('pmc'); const W = Math.max(300, box.clientWidth); lastW = W;
+  const box = $('pmc');
+  if (!box.clientWidth) return; // fanen Analyse er skjult: grafen tegnes, når den vises (applyRoute) eller får en bredde (ResizeObserver)
+  const W = Math.max(300, box.clientWidth); lastW = W;
   const padL = 30, padR = 8, H = 230, top = 22, bottom = 22, ih = H - top - bottom, iw = W - padL - padR;
   const x = d => padL + (d / (NDAYS - 1)) * iw;
   const act = actualPmc();
@@ -468,21 +507,36 @@ function paintZones() {
 paintZones();
 paintKost();
 
+// ---- Mere: kalenderabonnement og version ----
+// Selve abonnements-URL'en er hemmelig og står aldrig i siden. Linkene peger på guiderne på GitHub og tegnes her (siden selv nævner ingen eksterne adresser).
+const GUIDE_URL = 'https://github.com/EmilBerntsen-ui/ironman-2027/blob/main/docs/guides/';
+function paintMore() {
+  const link = (file, text) => `<a href="${GUIDE_URL}${file}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`;
+  $('calSub').innerHTML = `<p>Abonnér på kalenderen i din egen kalenderapp, så står pas (og ✅ ved de gennemførte) i telefonen.</p>` +
+    `<p><b>Linket er hemmeligt og står ikke her.</b> Du finder det i dine noter. Trinene står i guiderne (mappen docs/guides): ${link('kalender-iphone.md', 'iPhone')} og ${link('kalender-google.md', 'Google Kalender og Outlook')}.</p>`;
+  $('aboutVersion').textContent = `Version ${BUILD.version} · ${BUILD.target === 'artifact' ? 'Artifact' : 'app'}`;
+}
+paintMore();
+
 // ---- Start ----
 buildGrid();
-selectWeek(nowIdx);
+const startRoute = parseRoute(location.hash, weeks.length);
+selectWeek(startRoute.week !== null ? startRoute.week : nowIdx); // et ugelink (#u12) åbner kalenderen ved den uge
 refresh();
-requestAnimationFrame(() => scrollGridTo(nowIdx, false));
+applyRoute();
+requestAnimationFrame(() => scrollGridTo(selIdx, false));
 
 attach(store);
 const first = pickStore();
 if (first) swapTo(first);
-settings = mountSettings({ store, target: BUILD.target, version: BUILD.version, openButton: [savemode, $('settingsBtn')], gist: typeof GistStore !== 'undefined' ? GistStore : null, onWeight: kg => { weight = kg; repaintKost(); repaintSheetKost(); } });
+// Indstillingerne tegnes direkte i fanen Mere (#settingsMount). Statusknapperne og ⚙ åbner fanen (navigate), og "Angiv vægt" åbner den med markøren i vægtfeltet.
+settings = mountSettings({ store, target: BUILD.target, version: BUILD.version, container: $('settingsMount'), onReveal: () => navigate('mere'),
+  gist: typeof GistStore !== 'undefined' ? GistStore : null, onWeight: kg => { weight = kg; repaintKost(); repaintSheetKost(); } });
 // En anden fane har ændret vægten: følg med (storage-hændelsen kommer kun fra andre faner).
 window.addEventListener('storage', ev => {
   if (ev.key !== null && ev.key !== WEIGHT_KEY) return;
   const next = loadWeight();
-  if (next !== weight) { weight = next; repaintKost(); }
+  if (next !== weight) { weight = next; repaintKost(); if (settings) settings.syncWeight(); }
 });
 // Artifact: claude.use('db') kan tage op til 10 s. Start straks på LocalStore (alt gemmes lokalt), og skift, når databasen er klar.
 if (BUILD.target === 'artifact' && typeof ArtifactDbStore !== 'undefined') {

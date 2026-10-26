@@ -2,34 +2,12 @@
 // tilgængelige navne på søjlerne. Datoen styres med et falsk ur (alle klokkeslæt er lokal tid, så testen er uafhængig af tidszone).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-import { bundleJs } from '../build/bundle.mjs';
 import { plan } from '../src/plan.js';
 import { KOST_DISCLAIMER, KOST_REPORT_URL, WEIGHT_KEY, dayMinutes, dayNutrition, dayType, weekKcalAverage } from '../src/nutrition.js';
-import { fakeDocument, fakeWindow, memoryStorage } from './dom-harness.mjs';
+import { memoryStorage } from './dom-harness.mjs';
+import { loadApp } from './app-harness.mjs';
 import { settle } from './fake-gist.mjs';
-
-const SITE_FILES = ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/store/local.js', 'src/settings.js', 'src/app.js'];
-const ARTIFACT_FILES = ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'];
-
-function loadApp({ target = 'site', now = '2026-11-02T10:00:00', claude, storage = memoryStorage() } = {}) {
-  const clock = { t: new Date(now).getTime(), set(v) { this.t = new Date(v).getTime(); } };
-  class FakeDate extends Date {
-    constructor(...a) { if (a.length) super(...a); else super(clock.t); }
-    static now() { return clock.t; }
-  }
-  const doc = fakeDocument();
-  const win = fakeWindow(doc, { claude });
-  let reloads = 0;
-  const sandbox = {
-    document: doc, window: win, localStorage: storage, console, Promise, setTimeout, clearTimeout, queueMicrotask, Date: FakeDate,
-    matchMedia: () => ({ matches: false }), requestAnimationFrame: () => 0, location: { reload() { reloads++; } }, confirm: () => true, URL, Blob,
-  };
-  vm.runInNewContext(bundleJs(target === 'artifact' ? ARTIFACT_FILES : SITE_FILES, { target, version: 'test' }), sandbox, { filename: 'app.bundle.js' });
-  const $ = id => doc.getElementById(id);
-  return { doc, win, clock, $, storage, reloads: () => reloads, dialog: () => doc.body.find(e => e.tag === 'dialog' && e.className.includes('settings')) };
-}
 
 const DAY_MS = 864e5;
 const daysToRace = (from) => Math.round((new Date(2027, 7, 22) - new Date(new Date(from).setHours(0, 0, 0, 0))) / DAY_MS);
@@ -136,16 +114,18 @@ test('artifact: starter straks på LocalStore ("Forbinder…"), gemmer lokalt og
   assert.equal(saved.weeks.u01[key.slice(4)].done, true, 'gemt lokalt med det samme');
   assert.equal(db.sets.length, 0);
 
-  const dlg = app.dialog();
+  const pane = app.pane();
   app.$('savemode').click();                         // indstillinger åbnet, før databasen er klar
-  assert.match(dlg.textContent, /Gemmes kun på denne enhed/);
+  assert.match(pane.textContent, /Gemmes kun på denne enhed/);
+  assert.deepEqual(app.views(), ['mere']);
 
   resolveDb();
   await settle();
   assert.equal(app.$('savemode').textContent, 'Gemmes på tværs af enheder');
+  assert.equal(app.$('savemodeTop').textContent, 'Gemmes på tværs af enheder', 'begge statusknapper følger med');
   assert.equal(db.data.get('u01').sessions[key.slice(4)].done, true, 'ændringen fra ventetiden er sendt til databasen');
-  assert.match(dlg.textContent, /Delt lager/, 'indstillingsdialogen følger med til den nye Store');
-  assert.equal(app.doc.body.findAll(e => e.tag === 'dialog' && e.className.includes('settings')).length, 1, 'ingen ekstra dialog');
+  assert.match(pane.textContent, /Delt lager/, 'indstillingerne følger med til den nye Store');
+  assert.equal(app.doc.body.findAll(e => e.tag === 'dialog' && e.className.includes('settings')).length, 0, 'indstillingerne er en fane, ikke en dialog');
 
   check(app, key);                                   // nu gemmer en afkrydsning (fjernelse) direkte i databasen
   await settle();
@@ -550,7 +530,7 @@ test('kost: vægten angives i indstillingerne, tegner chips og ugesummer om med 
   const app = loadApp();
   assert.ok(!app.$('grid').innerHTML.includes(' kcal'));
   app.$('savemode').click();
-  const dlg = app.dialog();
+  const dlg = app.pane();
   assert.ok(dlg.byId('setWeight'), 'feltet findes');
   dlg.byId('setWeight').value = '70';
   dlg.buttons('Gem vægt')[0].click();
@@ -611,7 +591,7 @@ test('kost i Artifact-bygningen: samme chips og samme vægtfelt i indstillingern
   const app = loadApp({ target: 'artifact', ...W70() });
   assert.match(app.$('grid').innerHTML, /Hvile · 2\.450–2\.700 kcal · 210–350 g KH/);
   app.$('savemode').click();
-  const dlg = app.dialog();
+  const dlg = app.pane();
   assert.equal(dlg.byId('setWeight').value, '70');
   assert.match(dlg.textContent, /sendes aldrig til GitHub, til kalenderen eller andre steder/);
 });
@@ -621,8 +601,8 @@ test('kost i Artifact-bygningen: samme chips og samme vægtfelt i indstillingern
 const clickWeightLink = app => app.doc.fire('click', { target: { closest: sel => (sel === '[data-weight]' ? {} : null) } });
 const SRC_HTML = readFileSync(new URL('../src/app.html', import.meta.url), 'utf8');
 
-test('indstillinger: en tydelig knap i headeren (type button, aria-label, tekst) ved siden af statuslinjen, uden inline handlers', () => {
-  const header = SRC_HTML.slice(SRC_HTML.indexOf('<header'), SRC_HTML.indexOf('</header>'));
+test('indstillinger: en tydelig knap i race-headeren (type button, aria-label, tekst) ved siden af statuslinjen, uden inline handlers', () => {
+  const header = SRC_HTML.slice(SRC_HTML.indexOf('<header class="bib">'), SRC_HTML.indexOf('</header>', SRC_HTML.indexOf('<header class="bib">')));
   assert.ok(header.includes('<button type="button" class="btn settings-btn" id="settingsBtn" aria-label="Indstillinger"><span aria-hidden="true">⚙</span> Indstillinger</button>'));
   assert.ok(header.includes('id="savemode"'), 'statuslinjen er stadig en knap');
   assert.ok(header.indexOf('id="savemode"') < header.indexOf('id="settingsBtn"') && /<div class="bib-tools">[\s\S]*id="savemode"[\s\S]*id="settingsBtn"[\s\S]*<\/div>/.test(header));
@@ -633,16 +613,18 @@ test('indstillinger: en tydelig knap i headeren (type button, aria-label, tekst)
   assert.match(rule, /min-width: 44px/);
 });
 
-test('indstillinger: knappen i headeren åbner den samme dialog som statuslinjen (site og Artifact), og begge peger på en dialog', () => {
+test('indstillinger: statusknapperne og ⚙ (i race-headeren og i topbjælken) åbner fanen Mere med indstillingerne (site og Artifact), uden dialog', () => {
   for (const target of ['site', 'artifact']) {
-    for (const id of ['settingsBtn', 'savemode']) {
+    for (const id of ['settingsBtn', 'savemode', 'settingsTop', 'savemodeTop']) {
       const app = loadApp({ target });
-      assert.equal(app.dialog().open, false, `${target}: lukket fra start`);
-      assert.equal(app.$(id).getAttribute('aria-haspopup'), 'dialog', `${target}/${id}`);
+      assert.deepEqual(app.views(), ['idag'], `${target}: I dag fra start`);
+      assert.equal(app.$(id).getAttribute('aria-haspopup'), null, `${target}/${id}: ingen dialog at åbne`);
       app.$(id).click();
-      assert.equal(app.dialog().open, true, `${target}: ${id} åbner dialogen`);
-      assert.ok(app.dialog().byId('setWeight'), 'samme dialog: vægtfeltet er der');
-      assert.match(app.dialog().textContent, /Indstillinger/);
+      assert.deepEqual(app.views(), ['mere'], `${target}: ${id} åbner Mere`);
+      assert.equal(app.location.hash, '#mere');
+      assert.ok(app.pane().byId('setWeight'), 'vægtfeltet er der');
+      assert.match(app.pane().textContent, /Gem vægt/);
+      assert.equal(app.doc.body.find(e => e.tag === 'dialog' && e.className.includes('settings')), null);
     }
   }
 });
@@ -668,8 +650,8 @@ test('"Angiv vægt": uden vægt står knappen over kalenderen, i kost-guiden og 
 test('"Angiv vægt": et tryk åbner indstillingerne med markøren i vægtfeltet, og knappen forsvinder, når vægten er gemt', () => {
   const app = loadApp();
   clickWeightLink(app);
-  const dlg = app.dialog();
-  assert.equal(dlg.open, true);
+  const dlg = app.pane();
+  assert.deepEqual(app.views(), ['mere']);
   assert.equal(app.doc.activeElement, dlg.byId('setWeight'), 'vægtfeltet har fokus');
   dlg.byId('setWeight').value = '70';
   dlg.buttons('Gem vægt')[0].click();
@@ -678,12 +660,22 @@ test('"Angiv vægt": et tryk åbner indstillingerne med markøren i vægtfeltet,
   // et almindeligt tryk på "Indstillinger" lægger ikke fokus i vægtfeltet
   const plain = loadApp();
   plain.$('settingsBtn').click();
-  assert.notEqual(plain.doc.activeElement, plain.dialog().byId('setWeight'));
+  assert.notEqual(plain.doc.activeElement, plain.pane().byId('setWeight'));
 });
 
 test('"Angiv vægt" i artifact-bygningen åbner også indstillingerne med fokus i vægtfeltet', () => {
   const app = loadApp({ target: 'artifact' });
   clickWeightLink(app);
-  assert.equal(app.dialog().open, true);
-  assert.equal(app.doc.activeElement, app.dialog().byId('setWeight'));
+  assert.deepEqual(app.views(), ['mere']);
+  assert.equal(app.doc.activeElement, app.pane().byId('setWeight'));
+});
+
+test('"Angiv vægt" fra et åbent pasark lukker arket først, så fanen Mere ikke ligger bag en modal', () => {
+  const app = loadApp();
+  openSheetOf(app, K.runEasy);
+  assert.equal(app.$('sheet').open, true);
+  clickWeightLink(app);
+  assert.equal(app.$('sheet').open, false);
+  assert.deepEqual(app.views(), ['mere']);
+  assert.equal(app.doc.activeElement, app.pane().byId('setWeight'));
 });

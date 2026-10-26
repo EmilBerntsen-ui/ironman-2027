@@ -10,12 +10,12 @@ export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const TARGETS = {
   artifact: {
     shell: 'src/shell.artifact.html',
-    css: ['src/styles.css', 'src/settings.css'],
+    css: ['src/styles.css', 'src/views.css', 'src/settings.css'],
     js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'],
   },
   site: {
     shell: 'src/shell.site.html',
-    css: ['src/fonts.css', 'src/styles.css', 'src/settings.css', 'src/pwa.css'],
+    css: ['src/fonts.css', 'src/styles.css', 'src/views.css', 'src/settings.css', 'src/pwa.css'],
     js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/store/local.js', 'src/store/gist.js', 'src/settings.js', 'src/app.js', 'src/pwa.js'],
   },
 };

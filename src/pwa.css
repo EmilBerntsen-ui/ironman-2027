@@ -1,8 +1,9 @@
 /* owned by 2a. Opdateringstoast og iOS-installationstip (kun site). Bruger farvevariablerne fra styles.css, så lys/mørk følger med. */
 .pwa-layer {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  /* Over menuen: --bar-b (bund) og --rail (side) kommer fra views.css og er 0, når der ikke er nogen menu på den kant. */
+  position: fixed; left: var(--rail, 0px); right: 0; bottom: var(--bar-b, 0px); z-index: 50;
   display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 0 max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  padding: 0 max(12px, env(safe-area-inset-right, 0px)) 12px max(12px, env(safe-area-inset-left, 0px));
   pointer-events: none; /* kun selve beskederne fanger tryk, resten af siden forbliver brugbar */
 }
 .pwa-note {
@@ -14,3 +15,5 @@
 .pwa-note > span { flex: 1 1 auto; min-width: 0; }
 .pwa-x { flex: none; width: 40px; height: 40px; padding: 0 0 3px; background: none; border: 0; cursor: pointer; color: var(--muted); font-size: 26px; line-height: 1; }
 .pwa-x:hover { color: var(--ink); }
+/* Med menuen i siden (brede skærme) ligger toasten nederst, og så skal den selv holde afstand til sikkert område */
+@media (min-width: 900px) { .pwa-layer { padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); } }
