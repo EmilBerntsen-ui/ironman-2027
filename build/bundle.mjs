@@ -11,12 +11,12 @@ export const TARGETS = {
   artifact: {
     shell: 'src/shell.artifact.html',
     css: ['src/styles.css', 'src/settings.css'],
-    js: ['src/plan.js', 'src/progress.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'],
+    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'],
   },
   site: {
     shell: 'src/shell.site.html',
     css: ['src/fonts.css', 'src/styles.css', 'src/settings.css', 'src/pwa.css'],
-    js: ['src/plan.js', 'src/progress.js', 'src/store/local.js', 'src/store/gist.js', 'src/settings.js', 'src/app.js', 'src/pwa.js'],
+    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/store/local.js', 'src/store/gist.js', 'src/settings.js', 'src/app.js', 'src/pwa.js'],
   },
 };
 
