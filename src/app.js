@@ -205,6 +205,7 @@ function refresh() {
   weeks.forEach(w => { const st = weekStats(w); done += st.nDone; total += st.n; });
   $('ptext').textContent = `${done} af ${total} pas gennemført`;
   $('pbar').style.width = (done / total * 100) + '%';
+  paintToday();
   drawPerf();
 }
 
@@ -392,6 +393,81 @@ function navigate(name) {
 window.addEventListener('hashchange', applyRoute);
 for (const b of [savemode, $('settingsBtn'), $('savemodeTop'), $('settingsTop')]) b.addEventListener('click', () => navigate('mere'));
 
+// ---- I dag ----
+// paintToday() tegner hele I dag-fanen (dagens pas, stat-kort, ugens fremdrift og næste nøglepas) ud fra state, vægt og dags dato.
+// Den kaldes sidst i refresh(), så den følger enhver tilstandsændring: afkrydsning/log (store.subscribe), indlæsning af Store, ny vægt (repaintKost)
+// og dagsskifte (rollDay). Monteringspunkterne #addWorkout ("+ Tilføj træning") og #advice (plan-justering) ligger i fanen og er tomme: tegn i dem herfra.
+const STATE_TEXT = { done: 'Gennemført', off: 'Gennemført · varighed skæv', future: 'Planlagt', miss: 'Ikke gennemført' };
+const inPlan = () => todayIdx >= 0 && todayIdx < NDAYS;
+const daysFromNow = n => n === 0 ? 'i dag' : n === 1 ? 'i morgen' : `om ${n} dage`;
+const sparkSvg = pts => `<svg class="spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false">${pts ? `<polyline points="${pts}" fill="none" stroke="var(--sc)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>` : ''}</svg>`;
+
+function todayHeadHtml() {
+  if (todayIdx < 0) return `<div class="th-date">Planen starter <b>${fmt(START)}</b></div><div class="th-meta">Om ${-todayIdx} ${todayIdx === -1 ? 'dag' : 'dage'}. Her kommer dagens pas, når planen er i gang.</div>`;
+  if (todayIdx >= NDAYS) return `<div class="th-date">Planen er <b>slut</b></div><div class="th-meta">IRONMAN Copenhagen er overstået. Godt kørt.</div>`;
+  const wi = Math.floor(todayIdx / 7), di = todayIdx % 7, w = weeks[wi];
+  return `<div class="th-date">${DAYS_LONG[di]} <b>${fmt(addDays(w.start, di))}</b></div>` +
+    `<div class="th-meta">Uge ${w.n} · ${KIND[w.k]} · ${PH[w.ph].name}</div>` +
+    `<div class="th-kost">${kostChip(wi, di)}${weight === null ? `<span class="th-hint">${weightBtn} for gram og kcal</span>` : ''}</div>`;
+}
+function todayCardHtml(w, wi, di, si, s) {
+  if (s.s === 'rest') return `<article class="tc c-rest rest"><div class="tc-top"><span class="tc-sport">${SPORT.rest}</span></div><h3 class="tc-title">${esc(s.t)}</h3><p class="tc-desc">${esc(s.d)}</p></article>`;
+  const key = `${w.id}-${di}-${si}`, st = status(wi, di, si, s), e = entry(w.id, `${di}-${si}`);
+  const rec = paceText(s), ps = paceSummary(s, e), f = sessionFueling(w.days[di], si, { next: nextDayOf(wi, di), weight });
+  const logged = e ? [typeof e.min === 'number' ? `Logget ${dur(e.min)}` : 'Logget', ps && ps.card, e.rpe ? `RPE ${e.rpe}` : ''].filter(Boolean).join(' · ') : '';
+  return `<article class="tc c-${s.s} st-${st}" data-today="${key}">` +
+    `<div class="tc-top"><span class="tc-sport">${SPORT[s.s]}</span><span class="tc-state">${STATE_TEXT[st]}</span></div>` +
+    `<h3 class="tc-title">${esc(s.t)}</h3><div class="tc-meta num">${dur(s.m)} · Est. TSS ${tss(s)}</div>` +
+    (rec ? `<p class="tc-pace">${esc(rec)}</p>` : '') + `<p class="tc-desc">${esc(s.d)}</p>` + (logged ? `<p class="tc-logged">${esc(logged)}</p>` : '') +
+    `<h4 class="tc-kh">Kost</h4><dl class="tc-kost"><dt>Før</dt><dd>${esc(f.before)}</dd><dt>Under</dt><dd>${esc(f.during)}</dd><dt>Efter</dt><dd>${esc(f.after)}</dd></dl>` +
+    `<div class="tc-actions"><button type="button" class="btn primary" data-open="${key}">${e ? 'Rediger log' : 'Log pas'}</button>` +
+    (e ? '' : `<button type="button" class="btn" data-chk="${key}" aria-label="Markér ${esc(s.t)} som gennemført">Markér gennemført</button>`) + `</div></article>`;
+}
+function todaySessionsHtml() {
+  if (!inPlan()) return '';
+  const wi = Math.floor(todayIdx / 7), di = todayIdx % 7, w = weeks[wi];
+  return w.days[di].map((s, si) => todayCardHtml(w, wi, di, si, s)).join('');
+}
+
+// Fitness (CTL), Form (TSB) og Træthed (ATL) med den faktiske PMC; før der er logget noget bruges den planlagte.
+function statCardsHtml() {
+  const daily = actualDaily(), logged = daily.slice(0, actualUpto()).some(v => v > 0);
+  const v = pmcView(plannedPmc, actualPmc(daily), logged, todayIdx);
+  const src = v.source === 'actual' ? 'Faktisk' : 'Plan';
+  const card = (key, label, abbr, color) => {
+    const d = v.delta ? `${signed(v.delta[key])} på 7 dage` : '';
+    const shown = key === 'tsb' ? signed(v.now[key]) : String(v.now[key]);
+    return `<div class="stat" style="--sc: var(${color})" role="group" aria-label="${label} (${abbr}) ${shown}, ${src.toLowerCase()}${d ? ', ' + d : ''}">` +
+      `<div class="stat-l">${label} <small>${abbr}</small></div><div class="stat-v num">${shown}</div>` +
+      `${sparkSvg(sparkPoints(v.series, v.idx, key))}<div class="stat-d num">${d || '&nbsp;'}</div><div class="stat-s">${src}</div></div>`;
+  };
+  return card('ctl', 'Fitness', 'CTL', '--ctl') + card('tsb', 'Form', 'TSB', '--tsb') + card('atl', 'Træthed', 'ATL', '--atl');
+}
+
+function weekProgressHtml() {
+  const w = weeks[nowIdx], st = weekStats(w), pct = st.planMin ? Math.min(100, Math.round(st.doneMin / st.planMin * 100)) : 0;
+  return `<h3>${todayIdx < 0 ? 'Første uge' : 'Denne uge'} · uge ${w.n}</h3>` +
+    `<div class="wp-row"><span class="hh num">${hrs(st.doneMin)}<small> / ${hrs(st.planMin)} t</small></span><span class="num">Pas <b>${st.nDone}/${st.n}</b></span></div>` +
+    `<div class="bar" role="img" aria-label="${pct} % af ugens timer"><i style="width:${pct}%"></i></div>` +
+    (w.note ? `<p class="wp-note">${esc(w.note)}</p>` : '') + `<a class="wp-link" href="#${w.id}">Se ugen i kalenderen</a>`;
+}
+
+function nextKeyHtml() {
+  const k = nextKeySession(weeks, todayIdx, (wi, di, si) => !!entry(weeks[wi].id, `${di}-${si}`));
+  if (!k) return `<h3>Næste nøglepas</h3><p class="nk-none">Ingen flere nøglepas i planen.</p>`;
+  const w = weeks[k.wi], s = k.s, key = `${w.id}-${k.di}-${k.si}`, pz = paceCompact(s);
+  return `<h3>Næste nøglepas</h3><button type="button" class="nk c-${s.s}" data-open="${key}"><span class="nk-t">${esc(s.t)}</span>` +
+    `<span class="nk-m num">${DAYS[k.di]} ${fmt(addDays(w.start, k.di))} · ${daysFromNow(k.dayIdx - todayIdx)} · ${dur(s.m)}</span>${pz ? `<span class="nk-p">${esc(pz)}</span>` : ''}</button>`;
+}
+
+function paintToday() {
+  $('todayHead').innerHTML = todayHeadHtml();
+  $('todaySessions').innerHTML = todaySessionsHtml();
+  $('statCards').innerHTML = statCardsHtml();
+  $('weekProgress').innerHTML = weekProgressHtml();
+  $('nextKey').innerHTML = nextKeyHtml();
+}
+
 // ---- Præstationsgraf (SVG) ----
 const plannedTss = plannedDailyTss(weeks);
 const plannedPmc = pmc(plannedTss);
@@ -402,13 +478,18 @@ const markers = [
   { d: Math.round((TUNEUP - START) / DAY_MS), label: 'Køge', c: 'var(--race)' },
   { d: Math.round((RACE - START) / DAY_MS), label: 'IM CPH', c: 'var(--race)' },
 ];
-function actualPmc() {
+// Faktisk TSS pr. dag fra planstart (kun gennemførte pas, med de skrevne minutter hvis der er nogen).
+function actualDaily() {
   const daily = new Array(NDAYS).fill(0);
   Object.keys(byKey).forEach(key => {
     const k = byKey[key]; const e = entry(k.w.id, `${k.di}-${k.si}`);
     if (e) daily[dayIdxOf(k.wi, k.di)] += tss(k.s, typeof e.min === 'number' ? e.min : k.s.m);
   });
-  const upto = Math.min(NDAYS, todayIdx + 1);
+  return daily;
+}
+const actualUpto = () => Math.min(NDAYS, todayIdx + 1); // dage fra planstart til og med i dag (0 før planstart)
+function actualPmc(daily = actualDaily()) {
+  const upto = actualUpto();
   return upto > 0 ? pmc(daily.slice(0, upto)) : [];
 }
 let lastW = 0;
@@ -519,6 +600,7 @@ function paintMore() {
 paintMore();
 
 // ---- Start ----
+state = store.snapshot(); // det der allerede ligger lokalt, så første billede viser det gennemførte (attach() nedenfor henter resten)
 buildGrid();
 const startRoute = parseRoute(location.hash, weeks.length);
 selectWeek(startRoute.week !== null ? startRoute.week : nowIdx); // et ugelink (#u12) åbner kalenderen ved den uge

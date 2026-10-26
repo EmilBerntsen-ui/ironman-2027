@@ -29,9 +29,20 @@
         </div>
       </div>
     </header>
-    <!-- Monteringspunkter til plan-justering og "+ Tilføj træning". Tomme med vilje: app.js tegner intet i dem endnu. -->
-    <div id="addWorkout"></div>
-    <section id="advice"></section>
+    <div class="today-grid">
+      <div class="today-main">
+        <div class="th" id="todayHead"></div>
+        <div class="today-list" id="todaySessions"></div>
+        <!-- Monteringspunkter til næste opgave: "+ Tilføj træning" og plan-justering. Tomme med vilje: app.js tegner intet i dem endnu. -->
+        <div id="addWorkout"></div>
+        <section id="advice"></section>
+      </div>
+      <div class="today-side">
+        <div class="stats" id="statCards"></div>
+        <section class="panel" id="weekProgress" aria-label="Denne uge"></section>
+        <section class="panel" id="nextKey" aria-label="Næste nøglepas"></section>
+      </div>
+    </div>
   </section>
 
   <!-- Kalender (#kalender) -->

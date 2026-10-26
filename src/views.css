@@ -40,6 +40,92 @@ body { padding-left: var(--rail); }
 /* Tomme monteringspunkter (plan-justering og "+ Tilføj træning") fylder ikke noget, før noget tegnes i dem */
 #advice:empty, #addWorkout:empty { display: none; }
 
+/* ---- I dag ---- */
+.today-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.today-main, .today-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.th { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.th-date { font-family: var(--display); font-weight: 700; font-size: 26px; line-height: 1.05; text-transform: uppercase; letter-spacing: .01em; }
+.th-date b { font-weight: 800; color: var(--accent); }
+.th-meta { color: var(--muted); font-size: 14px; }
+.th-kost { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.th-kost .kc { display: inline-block; font-size: 12px; }
+.th-hint { color: var(--muted); font-size: 13px; }
+.today-list { display: flex; flex-direction: column; gap: 12px; }
+
+/* Dagens pas: et stort kort pr. pas, med samme overholdelsesfarver som kalenderen */
+.tc { --c: var(--rest); background: var(--surface); border: 1px solid var(--line); border-left: 6px solid var(--c); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tc.st-done { background: color-mix(in srgb, var(--ok) 12%, var(--surface)); border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); border-left-color: var(--c); }
+.tc.st-off { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); border-left-color: var(--c); }
+.tc.rest { background: transparent; border-style: dashed; border-left-style: solid; }
+.tc-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tc-sport { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--c); }
+.tc-state { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 2px 7px; border-radius: 3px; background: var(--sunk); color: var(--muted); white-space: nowrap; }
+.tc.st-done .tc-state { background: var(--ok); color: var(--surface); }
+.tc.st-off .tc-state { background: var(--warn); color: var(--ink); }
+.tc-title { font-size: 28px; line-height: 1.05; }
+.tc.rest .tc-title { color: var(--muted); }
+.tc-meta { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.tc-pace { margin: 0; font-weight: 600; font-size: 15px; }
+.tc-desc, .tc-logged { margin: 0; font-size: 15px; }
+.tc-logged { font-family: var(--mono); font-size: 13px; color: var(--ok); }
+.tc-kh { margin: 4px 0 -2px; font-family: var(--display); font-size: 16px; text-transform: uppercase; letter-spacing: .02em; }
+.tc-kost { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 0; padding: 10px 12px; font-size: 14px; background: var(--sunk); border-radius: 6px; }
+.tc-kost dt { color: var(--muted); font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding-top: 3px; }
+.tc-kost dd { margin: 0; overflow-wrap: anywhere; }
+.tc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.tc-actions .btn { min-height: 44px; padding: 8px 16px; }
+
+/* Stat-kort: Fitness / Form / Træthed */
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.stat { --sc: var(--ctl); background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--sc); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.stat-l { font-family: var(--display); font-weight: 700; font-size: 16px; text-transform: uppercase; letter-spacing: .02em; line-height: 1.1; }
+.stat-l small { font-family: var(--mono); font-size: 10px; font-weight: 500; color: var(--muted); letter-spacing: .06em; }
+.stat-v { font-family: var(--display); font-weight: 800; font-size: 38px; line-height: 1; }
+.spark { display: block; width: 100%; height: 28px; margin: 2px 0; overflow: visible; }
+.stat-d { font-family: var(--mono); font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-s { font-size: 11px; color: var(--muted); }
+
+/* Paneler: ugens fremdrift og næste nøglepas */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.panel h3 { font-size: 18px; text-transform: uppercase; letter-spacing: .02em; }
+.wp-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.wp-row .hh { font-family: var(--display); font-weight: 700; font-size: 26px; line-height: 1.05; }
+.wp-row .hh small { font-size: 14px; color: var(--muted); font-weight: 600; }
+.wp-row b { font-family: var(--mono); font-size: 14px; }
+.panel .bar { flex: none; }
+.wp-note { margin: 0; font-size: 14px; color: var(--muted); }
+.wp-link { color: var(--ink); font-size: 14px; text-underline-offset: 2px; min-height: 24px; align-self: flex-start; }
+.nk { --c: var(--rest); display: flex; flex-direction: column; gap: 2px; text-align: left; width: 100%; background: var(--sunk); border: 0; border-left: 4px solid var(--c); border-radius: 5px; padding: 10px 12px; cursor: pointer; min-height: 44px; }
+.nk:hover { background: color-mix(in srgb, var(--c) 10%, var(--sunk)); }
+.nk-t { font-weight: 600; font-size: 16px; }
+.nk-m { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.nk-p { font-family: var(--mono); font-size: 12px; }
+.nk-none { margin: 0; color: var(--muted); font-size: 14px; }
+
+@media (min-width: 900px) {
+  .today-grid { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 20px; }
+  .stat-v { font-size: 44px; }
+}
+@media (max-width: 719.98px) {
+  /* Race-headeren fylder mindre på telefon, så dagens pas kommer tidligere i syne: nedtælling til højre for titlen, overskriften over begge */
+  .bib { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "eyebrow eyebrow" "title count" "dist count" "progress progress"; padding: 16px 14px 12px; gap: 4px 12px; align-items: start; }
+  .bib > div:first-child { display: contents; }
+  .bib .eyebrow { grid-area: eyebrow; font-size: 11px; letter-spacing: .1em; }
+  .bib h1 { grid-area: title; font-size: clamp(30px, 8.8vw, 40px); }
+  .bib .dist { grid-area: dist; font-size: 14px; margin-top: 2px; }
+  .count { grid-area: count; }
+  .progress { grid-area: progress; margin-top: 4px; }
+  .bib::before, .bib::after { top: 6px; width: 8px; height: 8px; }
+  .count .big { font-size: clamp(52px, 15vw, 68px); }
+  .count .lbl { font-size: 12px; max-width: 8.5em; margin-left: auto; line-height: 1.2; }
+  .count .sub { font-size: 12px; max-width: 9em; margin-left: auto; line-height: 1.2; }
+  .btn.settings-btn { flex: 0 0 auto; padding: 6px 12px; }
+  .bib-tools { flex-wrap: nowrap; }
+  .bib-tools .savemode { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tc-kost { font-size: 13px; }
+  .tc-title { font-size: 26px; }
+}
+
 /* ---- Kalender ---- */
 .agenda { scroll-margin-top: 72px; }
 .gscroll { max-height: min(78vh, 920px); }
