@@ -452,6 +452,7 @@ test('zoneguiden regnes ud fra grundtallene og taler om fart, ikke watt', () => 
 // ---- Kost: chips, ugesum, blok i arket, guide og vægt ----
 
 const R = (a, b) => `${a}–${b}`; // kulhydratintervaller skrives ikke ud i kildefilen (private-ord-tjekket)
+const WEIGHT_BTN = '<button type="button" class="linkbtn" data-weight>Angiv vægt</button>';
 const W70 = () => ({ storage: memoryStorage({ [WEIGHT_KEY]: '70' }) });
 const chips = html => [...html.matchAll(/<span class="kc k-(\w+)">([^<]*)<\/span>/g)].map(m => ({ type: m[1], text: m[2] }));
 const dayChip = (wi, di) => { const w = planWeeks[wi]; return dayNutrition(dayType(w.days[di], new Date(w.start.getFullYear(), w.start.getMonth(), w.start.getDate() + di)), dayMinutes(w.days[di]), 70).chip; };
@@ -512,7 +513,7 @@ test('kost i arket: "Kost"-blok med dagen og Før / Under / Efter, mellem fakta 
   assert.match(html, /<section class="sh-kost"><h4>Kost<\/h4><dl><dt>Dagen<\/dt><dd>Let · 3\.\d{3}–3\.\d{3} kcal \(estimat\) · 350–490 g KH<small>Protein ca\. 110 g om dagen \(84–140 g\): 4–5 måltider à ca\. 21 g<\/small><\/dd>/);
   assert.match(html, /<dt>Før<\/dt><dd>Normal kost, ingen særlig forberedelse<\/dd><dt>Under<\/dt><dd>Kun vand<\/dd><dt>Efter<\/dt><dd>Måltid inden for 1–2 t med 20–40 g protein \+ kulhydrat<\/dd>/);
   assert.match(html, /Estimat og generel vejledning\. Se guiden Kost\./);
-  assert.doesNotMatch(html, /Angiv din vægt/, 'vægten er kendt');
+  assert.doesNotMatch(html, /Angiv vægt|data-weight/, 'vægten er kendt');
   assert.ok(html.indexOf('sh-rec') < html.indexOf('sh-kost') && html.indexOf('sh-kost') < html.indexOf('<form'));
 });
 
@@ -542,7 +543,7 @@ test('kost i arket uden vægt: g/kg og en opfordring til at angive vægten', () 
   assert.ok(html.includes(`<dd>Lang · ${R(8, 12)} g/kg KH`));
   assert.match(html, /Måltid 2–3 t før med 1–2 g\/kg kulhydrat, lidt fedt og fiber\./, 'uden gram i parentes');
   assert.doesNotMatch(html, /\(70–140 g\)|ca\. 210 mg/);
-  assert.match(html, /Angiv din vægt i indstillingerne \(knappen øverst\) for at få gram og kcal\./);
+  assert.ok(html.includes(`${WEIGHT_BTN} for at få gram og kcal i stedet for g/kg. Estimat og generel vejledning. Se guiden Kost.`));
 });
 
 test('kost: vægten angives i indstillingerne, tegner chips og ugesummer om med det samme, og kommer aldrig i fremdriften', () => {
@@ -613,4 +614,76 @@ test('kost i Artifact-bygningen: samme chips og samme vægtfelt i indstillingern
   const dlg = app.dialog();
   assert.equal(dlg.byId('setWeight').value, '70');
   assert.match(dlg.textContent, /sendes aldrig til GitHub, til kalenderen eller andre steder/);
+});
+
+// ---- Indstillinger-knap og "Angiv vægt" ----
+
+const clickWeightLink = app => app.doc.fire('click', { target: { closest: sel => (sel === '[data-weight]' ? {} : null) } });
+const SRC_HTML = readFileSync(new URL('../src/app.html', import.meta.url), 'utf8');
+
+test('indstillinger: en tydelig knap i headeren (type button, aria-label, tekst) ved siden af statuslinjen, uden inline handlers', () => {
+  const header = SRC_HTML.slice(SRC_HTML.indexOf('<header'), SRC_HTML.indexOf('</header>'));
+  assert.ok(header.includes('<button type="button" class="btn settings-btn" id="settingsBtn" aria-label="Indstillinger"><span aria-hidden="true">⚙</span> Indstillinger</button>'));
+  assert.ok(header.includes('id="savemode"'), 'statuslinjen er stadig en knap');
+  assert.ok(header.indexOf('id="savemode"') < header.indexOf('id="settingsBtn"') && /<div class="bib-tools">[\s\S]*id="savemode"[\s\S]*id="settingsBtn"[\s\S]*<\/div>/.test(header));
+  assert.doesNotMatch(SRC_HTML, /\son[a-z]+\s*=|<script/i, 'CSP: ingen inline handlers eller scripts');
+  const css = readFileSync(new URL('../src/settings.css', import.meta.url), 'utf8');
+  const rule = /\.btn\.settings-btn \{([^}]*)\}/.exec(css)?.[1] ?? '';
+  assert.match(rule, /min-height: 44px/);
+  assert.match(rule, /min-width: 44px/);
+});
+
+test('indstillinger: knappen i headeren åbner den samme dialog som statuslinjen (site og Artifact), og begge peger på en dialog', () => {
+  for (const target of ['site', 'artifact']) {
+    for (const id of ['settingsBtn', 'savemode']) {
+      const app = loadApp({ target });
+      assert.equal(app.dialog().open, false, `${target}: lukket fra start`);
+      assert.equal(app.$(id).getAttribute('aria-haspopup'), 'dialog', `${target}/${id}`);
+      app.$(id).click();
+      assert.equal(app.dialog().open, true, `${target}: ${id} åbner dialogen`);
+      assert.ok(app.dialog().byId('setWeight'), 'samme dialog: vægtfeltet er der');
+      assert.match(app.dialog().textContent, /Indstillinger/);
+    }
+  }
+});
+
+test('"Angiv vægt": uden vægt står knappen over kalenderen, i kost-guiden og i pasarkets kost-blok; med vægt står den ingen steder', () => {
+  const none = loadApp();
+  assert.ok(none.$('kostCap').innerHTML.includes(`Uden vægt vises g/kg. ${WEIGHT_BTN} for at få gram og kcal. Se guiden Kost.`));
+  assert.ok(none.$('kostGuide').innerHTML.includes(`<p class="kost-p kost-weight">Tabellen viser g/kg. ${WEIGHT_BTN} for at få en kolonne med gram.</p>`));
+  assert.ok(none.$('kostGuide').innerHTML.startsWith(`<p class="kost-note">${KOST_DISCLAIMER}</p>`));
+  openSheetOf(none, K.runEasy);
+  assert.ok(none.$('sh').innerHTML.includes(WEIGHT_BTN));
+  for (const html of [none.$('kostCap').innerHTML, none.$('kostGuide').innerHTML, none.$('sh').innerHTML]) assert.doesNotMatch(html, /\son[a-z]+\s*=|<script/i);
+
+  const has = loadApp(W70());
+  for (const html of [has.$('kostCap').innerHTML, has.$('kostGuide').innerHTML]) assert.doesNotMatch(html, /Angiv vægt|data-weight/);
+  assert.equal(has.$('kostCap').innerHTML, 'Under hver dag: dagtype · energi (estimat) · kulhydrat. Se guiden Kost.');
+  openSheetOf(has, K.runEasy);
+  assert.doesNotMatch(has.$('sh').innerHTML, /Angiv vægt|data-weight/);
+  const body = SRC_HTML;
+  assert.ok(body.includes('id="kostCap"') && !/Angiv vægt|data-weight/.test(body), 'knappen tegnes af app.js, ikke af siden');
+});
+
+test('"Angiv vægt": et tryk åbner indstillingerne med markøren i vægtfeltet, og knappen forsvinder, når vægten er gemt', () => {
+  const app = loadApp();
+  clickWeightLink(app);
+  const dlg = app.dialog();
+  assert.equal(dlg.open, true);
+  assert.equal(app.doc.activeElement, dlg.byId('setWeight'), 'vægtfeltet har fokus');
+  dlg.byId('setWeight').value = '70';
+  dlg.buttons('Gem vægt')[0].click();
+  assert.doesNotMatch(app.$('kostCap').innerHTML, /Angiv vægt/);
+  assert.doesNotMatch(app.$('kostGuide').innerHTML, /Angiv vægt/);
+  // et almindeligt tryk på "Indstillinger" lægger ikke fokus i vægtfeltet
+  const plain = loadApp();
+  plain.$('settingsBtn').click();
+  assert.notEqual(plain.doc.activeElement, plain.dialog().byId('setWeight'));
+});
+
+test('"Angiv vægt" i artifact-bygningen åbner også indstillingerne med fokus i vægtfeltet', () => {
+  const app = loadApp({ target: 'artifact' });
+  clickWeightLink(app);
+  assert.equal(app.dialog().open, true);
+  assert.equal(app.doc.activeElement, app.dialog().byId('setWeight'));
 });

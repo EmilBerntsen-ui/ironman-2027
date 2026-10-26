@@ -13,7 +13,10 @@
     <div class="progress">
       <div class="bar" aria-hidden="true"><i id="pbar"></i></div>
       <span class="num" id="ptext">0 af 0 pas gennemført</span>
-      <button type="button" class="savemode" id="savemode" title="Synkronisering og eksport">Forbinder…</button>
+      <div class="bib-tools">
+        <button type="button" class="savemode" id="savemode" title="Synkronisering og eksport">Forbinder…</button>
+        <button type="button" class="btn settings-btn" id="settingsBtn" aria-label="Indstillinger"><span aria-hidden="true">⚙</span> Indstillinger</button>
+      </div>
     </div>
   </header>
 
@@ -30,7 +33,7 @@
       <span style="--c: var(--swim)">Svøm</span><span style="--c: var(--bike)">Cykel</span><span style="--c: var(--run)">Løb</span><span style="--c: var(--str)">Styrke</span><span style="--c: var(--race)">Konkurrence</span>
       <span style="--c: var(--ok)">Gennemført</span><span style="--c: var(--warn)">Varighed &gt;20 % skævt</span><span style="--c: var(--miss)">Ikke gennemført</span>
     </div>
-    <p class="perf-cap kost-cap">Under hver dag: dagtype · energi (estimat) · kulhydrat. Angiv din vægt i indstillingerne (knappen øverst) for at få gram og kcal, ellers vises g/kg. Se guiden Kost.</p>
+    <p class="perf-cap kost-cap" id="kostCap">Under hver dag: dagtype · energi (estimat) · kulhydrat. Se guiden Kost.</p>
     <div class="gscroll" id="grid"></div>
     <div class="agenda" id="agenda" aria-live="polite"></div>
   </section>

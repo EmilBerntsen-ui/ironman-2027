@@ -65,6 +65,8 @@ function loadWeight() {
 weight = loadWeight();
 const nextDayOf = (wi, di) => di < 6 ? weeks[wi].days[di + 1] : (weeks[wi + 1] ? weeks[wi + 1].days[0] : []);
 const dayKost = (wi, di) => { const w = weeks[wi], d = w.days[di]; return dayNutrition(dayType(d, addDays(w.start, di)), dayMinutes(d), weight); };
+// "Angiv vægt": et link-agtigt knapelement, som document-lytteren (data-weight) knytter til indstillingerne med markøren i vægtfeltet. Vises kun uden vægt.
+const weightBtn = `<button type="button" class="linkbtn" data-weight>Angiv vægt</button>`;
 const kostChip = (wi, di) => { const n = dayKost(wi, di); return `<span class="kc k-${n.type}">${esc(n.chip)}</span>`; };
 // "Kost"-blokken i arket: dagen (dagtype, energi, kulhydrat, protein) og før/under/efter for passet.
 function kostSheetHtml(k) {
@@ -73,7 +75,7 @@ function kostSheetHtml(k) {
   const row = (dt, dd, subs = []) => `<dt>${dt}</dt><dd>${esc(dd)}${subs.filter(Boolean).map(x => `<small>${esc(x)}</small>`).join('')}</dd>`;
   return `<section class="sh-kost"><h4>Kost</h4><dl>${row('Dagen', n.text, [n.proteinText, n.note])}` +
     (f ? row('Før', f.before) + row('Under', f.during) + row('Efter', f.after) : '') + `</dl>` +
-    `<p class="hint">${weight === null ? 'Angiv din vægt i indstillingerne (knappen øverst) for at få gram og kcal. ' : ''}Estimat og generel vejledning. Se guiden Kost.</p></section>`;
+    `<p class="hint">${weight === null ? `${weightBtn} for at få gram og kcal i stedet for g/kg. ` : ''}Estimat og generel vejledning. Se guiden Kost.</p></section>`;
 }
 // Guiden "Kost": data fra kostGuide() (nutrition.js), tegnet her. Linket til rapporten bor her og ikke i app.html (siden må kun nævne api.github.com).
 function paintKost() {
@@ -83,7 +85,10 @@ function paintKost() {
     (s.items ? `<ul>${s.items.map(i => `<li>${i.b ? `<b>${esc(i.b)}:</b> ` : ''}${esc(i.t)}</li>`).join('')}</ul>` : '') +
     (s.notes || []).map(t => `<p class="kost-p">${esc(t)}</p>`).join('') +
     (s.link ? `<p class="kost-p"><a href="${esc(s.link.href)}" target="_blank" rel="noopener noreferrer">${esc(s.link.text)}</a></p>` : '') + `</section>`;
-  $('kostGuide').innerHTML = `<p class="kost-note">${esc(KOST_DISCLAIMER)}</p>` + kostGuide(weight).map(sec).join('');
+  $('kostGuide').innerHTML = `<p class="kost-note">${esc(KOST_DISCLAIMER)}</p>` +
+    (weight === null ? `<p class="kost-p kost-weight">Tabellen viser g/kg. ${weightBtn} for at få en kolonne med gram.</p>` : '') + kostGuide(weight).map(sec).join('');
+  // Linjen over kalenderen: uden vægt vises g/kg, og "Angiv vægt" står lige ved chipsene.
+  $('kostCap').innerHTML = `Under hver dag: dagtype · energi (estimat) · kulhydrat. ${weight === null ? `Uden vægt vises g/kg. ${weightBtn} for at få gram og kcal. ` : ''}Se guiden Kost.`;
 }
 // Vægten er ændret (indstillingerne, eller en anden fane): tegn chips, ugesummer og guide igen uden at miste rullepositionen.
 function repaintKost() {
@@ -92,6 +97,12 @@ function repaintKost() {
   grid.scrollTop = scroll;
   refresh();
   paintKost();
+}
+
+// Er et pasark åbent under indstillingerne ("Angiv vægt" fra arket), får kost-blokken ny vægt uden at røre formularen under den.
+function repaintSheetKost() {
+  const k = openKey && byKey[openKey], block = k && sheet.querySelector('.sh-kost');
+  if (block) block.outerHTML = kostSheetHtml(k);
 }
 
 // ---- Header ----
@@ -322,6 +333,7 @@ document.addEventListener('click', ev => {
     else setEntry(c.dataset.chk, e ? null : { at: new Date().toISOString() });
     return;
   }
+  if (ev.target.closest('[data-weight]')) { if (settings) settings.open({ focusWeight: true }); return; }
   const o = ev.target.closest('[data-open]');
   if (o) openSheet(o.dataset.open);
 });
@@ -465,7 +477,7 @@ requestAnimationFrame(() => scrollGridTo(nowIdx, false));
 attach(store);
 const first = pickStore();
 if (first) swapTo(first);
-settings = mountSettings({ store, target: BUILD.target, version: BUILD.version, openButton: savemode, gist: typeof GistStore !== 'undefined' ? GistStore : null, onWeight: kg => { weight = kg; repaintKost(); } });
+settings = mountSettings({ store, target: BUILD.target, version: BUILD.version, openButton: [savemode, $('settingsBtn')], gist: typeof GistStore !== 'undefined' ? GistStore : null, onWeight: kg => { weight = kg; repaintKost(); repaintSheetKost(); } });
 // En anden fane har ændret vægten: følg med (storage-hændelsen kommer kun fra andre faner).
 window.addEventListener('storage', ev => {
   if (ev.key !== null && ev.key !== WEIGHT_KEY) return;

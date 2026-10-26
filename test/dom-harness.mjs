@@ -44,7 +44,8 @@ export class FakeEl {
   click() { if (this.disabled) return; this.dispatch('click'); }
   showModal() { this.open = true; }
   close() { if (this.open) { this.open = false; this.dispatch('close'); } }
-  focus() {} select() {} scrollTo() {} scrollIntoView() {}
+  focus() { if (this.doc) this.doc.activeElement = this; }
+  select() {} scrollTo() {} scrollIntoView() {}
   getBoundingClientRect() { return { left: 0, top: 0, width: this.clientWidth, height: this.clientHeight }; }
   closest() { return null; }
 
@@ -63,6 +64,7 @@ export function fakeDocument({ visibilityState = 'visible' } = {}) {
   const byId = new Map();
   const doc = {
     visibilityState,
+    activeElement: null, // sættes af FakeEl.focus()
     body: null,
     createElement: tag => new FakeEl(tag, doc),
     getElementById(id) { if (!byId.has(id)) { const e = new FakeEl('div', doc); e.id = id; byId.set(id, e); } return byId.get(id); },

@@ -28,18 +28,20 @@ const countSessions = p => Object.values(p).reduce((n, w) => n + Object.keys(w).
 const weeksOf = n => `${n} ${n === 1 ? 'uge' : 'uger'}`;
 
 // store: den aktive Store. target: 'artifact' | 'site'. gist: GistStore-klassen (site) eller null (artifact).
+// openButton: knappen (eller en liste af knapper) der åbner dialogen: statuslinjen og "Indstillinger"-knappen i headeren.
 // onWeight(kg|null): kaldes, når vægten er gemt (null = fjernet). Vægten er personlig og bor kun i localStorage på enheden (src/nutrition.js),
 // aldrig i Store'en, så den hverken synkroniseres, eksporteres eller kommer i kalenderen.
-// → { open(), close(), setStore(next), dispose() }. setStore skifter Store (fx fra LocalStore til ArtifactDbStore, når databasen er klar).
+// → { open({ focusWeight }), close(), setStore(next), dispose() }. open({ focusWeight: true }) åbner dialogen med markøren i vægtfeltet. setStore skifter Store (fx fra LocalStore til ArtifactDbStore, når databasen er klar).
 export function mountSettings({ store, target, version, openButton, gist = null, onWeight = null } = {}) {
-  if (!store || !openButton || typeof document === 'undefined') return null;
+  const openers = [].concat(openButton || []).filter(Boolean);
+  if (!store || !openers.length || typeof document === 'undefined') return null;
   const isSite = target === 'site';
   let framed = false;
   try { framed = window.top !== window.self; } catch { framed = true; }
 
   const dlg = el('dialog', { class: 'sheet settings', 'aria-labelledby': 'setTitle', lang: 'da' });
   document.body.append(dlg);
-  openButton.setAttribute('aria-haspopup', 'dialog');
+  for (const b of openers) b.setAttribute('aria-haspopup', 'dialog');
   let refs = {};
   let blobUrl = null;
   let authShown = false; // om dialogen viser feltet til et nyt token (status 'auth')
@@ -213,6 +215,7 @@ export function mountSettings({ store, target, version, openButton, gist = null,
     const current = readWeight(ls);
     const input = el('input', { type: 'text', id: 'setWeight', inputmode: 'decimal', autocomplete: 'off', maxlength: '6', placeholder: 'fx 70' });
     input.value = current === null ? '' : String(current).replace('.', ',');
+    refs.weight = input;
     const msg = el('div', { class: 'msg', role: 'status' });
     const apply = () => {
       const r = saveWeight(ls, input.value);
@@ -251,10 +254,16 @@ export function mountSettings({ store, target, version, openButton, gist = null,
     paintStatus(s);
   }
 
-  const onOpen = () => { render(); if (!dlg.open) dlg.showModal(); };
+  // focusWeight: "Angiv vægt"-linkene. Dialogen tegnes forfra, og markøren står i vægtfeltet (rullet frem), så man kan skrive med det samme.
+  const open = ({ focusWeight = false } = {}) => {
+    render();
+    if (!dlg.open) dlg.showModal();
+    if (focusWeight && refs.weight) { refs.weight.scrollIntoView({ block: 'center' }); refs.weight.focus(); }
+  };
+  const onOpen = () => open();
   const onBackdrop = ev => { if (ev.target === dlg) dlg.close(); };
   const onClose = () => { if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; } };
-  openButton.addEventListener('click', onOpen);
+  for (const b of openers) b.addEventListener('click', onOpen);
   dlg.addEventListener('click', onBackdrop);
   dlg.addEventListener('close', onClose);
   // Skifter status ind i eller ud af 'auth' mens dialogen er åben, tegnes den om, så feltet til et nyt token dukker op.
@@ -262,7 +271,7 @@ export function mountSettings({ store, target, version, openButton, gist = null,
   let offStatus = store.onStatus(onStatus);
 
   return {
-    open: onOpen,
+    open,
     close: () => dlg.close(),
     setStore(next) {
       if (!next || next === store) return;
@@ -273,7 +282,7 @@ export function mountSettings({ store, target, version, openButton, gist = null,
     },
     dispose() {
       offStatus();
-      openButton.removeEventListener('click', onOpen);
+      for (const b of openers) b.removeEventListener('click', onOpen);
       dlg.removeEventListener('click', onBackdrop);
       dlg.removeEventListener('close', onClose);
       onClose();

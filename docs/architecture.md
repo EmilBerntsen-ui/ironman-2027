@@ -211,7 +211,7 @@ Changes to `app.js` (2b):
 - `entry(wk, key)` returns the entry only when `isDone(e)`.
 - `setEntry(key, val)` calls `store.save(wk, sub, val ? { ...val, done: true, sig: sessionSig(s) } : null)`.
 - `store.subscribe(refresh)`, and `store.onStatus(s => { savemode.textContent = s.label; })`.
-- `#savemode` becomes `<button type="button" class="savemode" id="savemode">`, which opens the settings dialog.
+- `#savemode` becomes `<button type="button" class="savemode" id="savemode">`, which opens the settings dialog. A visible "⚙ Indstillinger" button (`#settingsBtn`, at least 44 × 44 px) next to it opens the same dialog, and "Angiv vægt" link-buttons (`data-weight`, shown only without a saved weight) open it with the weight field focused.
 - After connect or disconnect, settings calls `location.reload()`. Re-initialising this way is simplest and correct.
 - Today, today's index and the current week are recomputed by `rollDay()` on `visibilitychange` (to visible), `pageshow` and `focus` when the date has changed. It redraws the header, grid, agenda and charts. A week the user navigated to stays selected; a user who was on the old "this week" follows to the new one. An installed PWA can stay in the background for days, so the date computed at load time would go stale.
 - Accessibility: the page body is a single `<main>` landmark. The week bars are `role="button"` groups whose accessible name (`aria-label`) is the same text as their tooltip (`<title>`).

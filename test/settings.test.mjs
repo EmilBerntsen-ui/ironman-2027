@@ -208,6 +208,53 @@ test('setStore: dialogen følger med, når en LocalStore afløses af en anden St
   });
 });
 
+// ---- Flere knapper, og fokus i vægtfeltet ----
+
+test('openButton kan være en liste (statuslinjen og Indstillinger-knappen): alle åbner samme dialog, får aria-haspopup, og dispose fjerner alle lyttere', async () => {
+  await withBrowser({}, async env => {
+    const status = env.doc.createElement('button'), gear = env.doc.createElement('button');
+    const ui = mountSettings({ store: fakeStore('local'), target: 'site', version: 'test', openButton: [status, gear], gist: fakeGistClass() });
+    for (const b of [status, gear]) assert.equal(b.getAttribute('aria-haspopup'), 'dialog');
+    const dlg = env.doc.body.find(e => e.tag === 'dialog');
+    for (const b of [status, gear]) {
+      b.click();
+      assert.equal(dlg.open, true);
+      assert.equal(env.doc.body.findAll(e => e.tag === 'dialog').length, 1, 'én dialog, ikke én pr. knap');
+      dlg.close();
+    }
+    ui.dispose();
+    for (const b of [status, gear]) assert.equal((b.handlers.click ?? []).length, 0);
+  });
+  await withBrowser({}, async env => {
+    assert.equal(mountSettings({ store: fakeStore('local'), target: 'site', openButton: [] }), null, 'uden knapper');
+    assert.equal(mountSettings({ store: fakeStore('local'), target: 'site', openButton: [null] }), null);
+  });
+});
+
+test('open({ focusWeight: true }) åbner dialogen med markøren i vægtfeltet; et almindeligt åbne gør ikke', async () => {
+  await withBrowser({}, async env => {
+    const button = env.doc.createElement('button');
+    const ui = mountSettings({ store: fakeStore('local'), target: 'site', version: 'test', openButton: button, gist: fakeGistClass() });
+    const dlg = env.doc.body.find(e => e.tag === 'dialog');
+    ui.open({ focusWeight: true });
+    assert.equal(dlg.open, true);
+    assert.equal(env.doc.activeElement, dlg.byId('setWeight'));
+    dlg.close();
+    env.doc.activeElement = null;
+    button.click();
+    assert.equal(env.doc.activeElement, null, 'tryk på en åbne-knap flytter ikke fokus');
+    ui.open();
+    assert.equal(env.doc.activeElement, null);
+  });
+  for (const kind of ['artifact', 'gist']) {
+    await withBrowser({}, async env => {
+      const ui = mountSettings({ store: fakeStore(kind), target: kind === 'gist' ? 'site' : 'artifact', version: 'test', openButton: env.doc.createElement('button'), gist: fakeGistClass() });
+      ui.open({ focusWeight: true });
+      assert.equal(env.doc.activeElement, env.doc.body.find(e => e.tag === 'dialog').byId('setWeight'), kind);
+    });
+  }
+});
+
 // ---- Din vægt (kun lokalt) ----
 
 function openWeight(env, store, extra = {}) {

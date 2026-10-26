@@ -6,6 +6,17 @@ button.savemode { background: none; border: 0; border-radius: 4px; padding: 6px 
 button.savemode:hover { color: var(--ink); }
 button.savemode[data-state="auth"], button.savemode[data-state="error"] { color: var(--miss); }
 
+/* Indstillinger-knappen i headeren: tydelig knap (mindst 44 × 44 px), ved siden af statuslinjen. På smalle skærme ryger den under statussen. */
+.bib-tools { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.btn.settings-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 44px; min-height: 44px; padding: 8px 16px; font-size: 15px; white-space: nowrap; }
+.btn.settings-btn span { font-size: 18px; line-height: 1; }
+@media (max-width: 719.98px) { .btn.settings-btn { flex: 1 1 auto; } }
+
+/* "Angiv vægt": et link i løbende tekst, men en rigtig knap (tastatur, fokusring og et tryk-mål, der ikke er for småt på telefon) */
+button.linkbtn { background: none; border: 0; padding: 0 2px; margin: 0; font: inherit; color: var(--ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; border-radius: 3px; }
+button.linkbtn:hover { color: var(--accent); }
+@media (pointer: coarse) { button.linkbtn { padding: 12px 4px; margin: -12px 0; } }
+
 dialog.settings .sh { --c: var(--accent); gap: 14px; }
 dialog.settings section { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
 dialog.settings h4 { margin: 0; font-family: var(--display); font-size: 20px; text-transform: uppercase; letter-spacing: .01em; }
