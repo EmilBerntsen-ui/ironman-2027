@@ -2,7 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mountSettings } from '../src/settings.js';
+import { WEIGHT_ERROR, WEIGHT_KEY } from '../src/nutrition.js';
+import { FORMAT, GIST_DESCRIPTION, META_FILE } from '../src/progress.js';
+import { GistStore } from '../src/store/gist.js';
 import { fakeDocument, fakeWindow, memoryStorage } from './dom-harness.mjs';
+import { TEST_LOGIN, TEST_TOKEN, createClock, createFakeGitHub, settle } from './fake-gist.mjs';
 
 const GIST = '0123456789abcdef0123456789abcdef';
 const NEW_TOKEN = 'github_pat_NYTTOKEN0000000000000000';
@@ -201,5 +205,126 @@ test('setStore: dialogen følger med, når en LocalStore afløses af en anden St
     ui.dispose();
     assert.equal(shared.subs.size, 0);
     assert.equal(env.doc.body.find(e => e.tag === 'dialog'), null);
+  });
+});
+
+// ---- Din vægt (kun lokalt) ----
+
+function openWeight(env, store, extra = {}) {
+  const button = env.doc.createElement('button');
+  const calls = [];
+  const ui = mountSettings({ store, target: 'site', version: 'test', openButton: button, gist: fakeGistClass(), onWeight: kg => calls.push(kg), ...extra });
+  button.click();
+  return { ui, calls, dlg: env.doc.body.find(e => e.tag === 'dialog') };
+}
+const msgOf = dlg => dlg.findAll(e => e.tag === 'div' && e.className.split(' ').includes('msg')).map(e => e.textContent).filter(Boolean);
+const badMsg = dlg => dlg.find(e => e.className.split(' ').includes('msg') && e.className.split(' ').includes('bad'));
+
+test('vægtfeltet findes i alle indstillingsdialoger (lokal, Artifact og GitHub), forklarer at vægten kun bliver på enheden, og er forudfyldt', async () => {
+  for (const kind of ['local', 'artifact', 'gist']) {
+    await withBrowser({}, async env => {
+      env.storage.setItem(WEIGHT_KEY, '72.5');
+      const { dlg } = openWeight(env, fakeStore(kind));
+      const field = dlg.byId('setWeight');
+      assert.ok(field, kind);
+      assert.equal(field.value, '72,5', 'vist med dansk komma');
+      assert.match(dlg.textContent, /Din vægt \(kg\)/);
+      assert.match(dlg.textContent, /gemmes kun på denne enhed og sendes aldrig til GitHub, til kalenderen eller andre steder/);
+      assert.match(dlg.textContent, /35 til 200 kg/);
+    });
+  }
+  await withBrowser({}, async env => assert.equal(openWeight(env, fakeStore('local')).dlg.byId('setWeight').value, '', 'uden vægt er feltet tomt'));
+});
+
+test('vægt: gem med knap og Enter lægger den kun i localStorage under sin egen nøgle, melder tilbage, og tomt felt fjerner den', async () => {
+  await withBrowser({}, async env => {
+    const { dlg, calls } = openWeight(env, fakeStore('gist'));
+    const field = dlg.byId('setWeight');
+    field.value = ' 70,5 ';
+    dlg.buttons('Gem vægt')[0].click();
+    assert.equal(env.storage.getItem(WEIGHT_KEY), '70.5');
+    assert.deepEqual(calls, [70.5]);
+    assert.deepEqual(msgOf(dlg), ['Gemt på denne enhed.']);
+    field.value = '72';
+    let prevented = 0;
+    field.dispatch('keydown', { key: 'Enter', preventDefault() { prevented++; } });
+    assert.equal(env.storage.getItem(WEIGHT_KEY), '72');
+    assert.equal(prevented, 1);
+    assert.deepEqual(calls, [70.5, 72]);
+    field.dispatch('keydown', { key: 'a' });
+    assert.deepEqual(calls, [70.5, 72], 'andre taster gemmer ikke');
+    field.value = '';
+    dlg.buttons('Gem vægt')[0].click();
+    assert.equal(env.storage.getItem(WEIGHT_KEY), null);
+    assert.deepEqual(calls, [70.5, 72, null]);
+    assert.deepEqual(msgOf(dlg), ['Vægten er fjernet fra denne enhed.']);
+    assert.deepEqual(env.storage.keys().sort(), ['im2027-progress-v2'], 'kun fremdriften er tilbage');
+  });
+});
+
+test('vægt: uden for 35–200 kg og alt der ikke er et tal afvises med en forklaring og ændrer intet', async () => {
+  await withBrowser({}, async env => {
+    env.storage.setItem(WEIGHT_KEY, '70');
+    const { dlg, calls } = openWeight(env, fakeStore('local'));
+    for (const bad of ['34,9', '200,1', '0', 'tung', '70 kg og lidt']) {
+      dlg.byId('setWeight').value = bad;
+      dlg.buttons('Gem vægt')[0].click();
+      assert.equal(badMsg(dlg)?.textContent, WEIGHT_ERROR, bad);
+      assert.equal(env.storage.getItem(WEIGHT_KEY), '70', `${bad}: uændret`);
+    }
+    assert.deepEqual(calls, []);
+    dlg.byId('setWeight').value = '35';
+    dlg.buttons('Gem vægt')[0].click();
+    assert.equal(env.storage.getItem(WEIGHT_KEY), '35');
+    assert.equal(badMsg(dlg), null, 'fejlen forsvinder, når en gyldig vægt gemmes');
+    assert.deepEqual(calls, [35]);
+  });
+});
+
+test('vægt: blokeret lokal lagring giver en fejl og ingen tilbagemelding', async () => {
+  await withBrowser({}, async env => {
+    env.storage.setItem = () => { throw new Error('blokeret'); };
+    const { dlg, calls } = openWeight(env, fakeStore('local'));
+    dlg.byId('setWeight').value = '70';
+    dlg.buttons('Gem vægt')[0].click();
+    assert.match(badMsg(dlg)?.textContent ?? '', /lokal lagring/);
+    assert.deepEqual(calls, []);
+  });
+});
+
+test('vægt: den forlader aldrig enheden. Ingen gist-fil, ingen anmodning til GitHub, intet i eksporten og intet i Store-data indeholder den', async () => {
+  const GIST = '0123456789abcdef0123456789abcdef';
+  await withBrowser({}, async env => {
+    const clock = createClock('2026-11-24T10:00:00.000Z');
+    const fake = createFakeGitHub({ now: clock.now });
+    fake.addGist({ id: GIST, description: GIST_DESCRIPTION, files: { [META_FILE]: { format: FORMAT, v: 2, kind: 'meta', start: '2026-10-26', createdAt: '2026-11-01T00:00:00.000Z' } } });
+    const store = new GistStore({ token: TEST_TOKEN, gistId: GIST, login: TEST_LOGIN, connectedAt: '2026-11-20T00:00:00.000Z' }, {
+      fetch: fake.fetch, storage: env.storage, now: clock.now, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, random: () => 0.5, poll: false, win: null, locks: null,
+    });
+    await store.load();
+    const { dlg } = openWeight(env, store);
+    dlg.byId('setWeight').value = '71,3';
+    dlg.buttons('Gem vægt')[0].click();
+    assert.equal(env.storage.getItem(WEIGHT_KEY), '71.3');
+
+    store.save('u05', '1-0', { done: true, min: 42, rpe: 6, note: 'Fin tur', sig: 'run:Løb' });
+    store.save('u06', '2-0', { done: true, sig: 'bike:Cykel' });
+    await clock.advance(1500);
+    await store.syncNow();
+    await settle();
+    assert.ok(fake.count({ method: 'PATCH' }) >= 1, 'der blev skrevet til gisten');
+
+    const wire = JSON.stringify(fake.requests.map(r => ({ url: r.url, body: r.body })));  // alt der er sendt til GitHub
+    const files = JSON.stringify(fake.gist(GIST));                                        // alt der ligger i gisten
+    const snapshot = JSON.stringify(store.snapshot());
+    dlg.buttons('Eksportér')[0].click();
+    const exported = dlg.find(e => e.tag === 'textarea' && e.attrs['aria-label'] === 'Eksporteret JSON').value;
+    assert.ok(exported.includes('"u05"'), 'eksporten har fremdriften');
+    for (const [name, text] of Object.entries({ wire, files, snapshot, exported })) {
+      assert.doesNotMatch(text, /71[.,]3/, `${name}: vægten`);
+      assert.doesNotMatch(text, /im2027-weight|weight|vægt/i, `${name}: nøglen`);
+    }
+    assert.deepEqual(fake.fileNames(GIST), ['_ironman-2027.json', 'u05.json', 'u06.json'], 'ingen ekstra gist-fil til vægten');
+    store.dispose();
   });
 });

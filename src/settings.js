@@ -3,6 +3,7 @@
 // Bygges med DOM-metoder og textContent (aldrig innerHTML med data), så noter og alt fra GitHub kun nogensinde er tekst.
 // Ingen bivirkninger ved indlæsning; alt sker i mountSettings().
 import { parseAny, toExport } from './progress.js';
+import { WEIGHT_MAX, WEIGHT_MIN, readWeight, saveWeight } from './nutrition.js';
 
 const PAT_NEW_URL = 'https://github.com/settings/personal-access-tokens/new';
 const PAT_LIST_URL = 'https://github.com/settings/personal-access-tokens';
@@ -27,8 +28,10 @@ const countSessions = p => Object.values(p).reduce((n, w) => n + Object.keys(w).
 const weeksOf = n => `${n} ${n === 1 ? 'uge' : 'uger'}`;
 
 // store: den aktive Store. target: 'artifact' | 'site'. gist: GistStore-klassen (site) eller null (artifact).
+// onWeight(kg|null): kaldes, når vægten er gemt (null = fjernet). Vægten er personlig og bor kun i localStorage på enheden (src/nutrition.js),
+// aldrig i Store'en, så den hverken synkroniseres, eksporteres eller kommer i kalenderen.
 // → { open(), close(), setStore(next), dispose() }. setStore skifter Store (fx fra LocalStore til ArtifactDbStore, når databasen er klar).
-export function mountSettings({ store, target, version, openButton, gist = null } = {}) {
+export function mountSettings({ store, target, version, openButton, gist = null, onWeight = null } = {}) {
   if (!store || !openButton || typeof document === 'undefined') return null;
   const isSite = target === 'site';
   let framed = false;
@@ -203,6 +206,30 @@ export function mountSettings({ store, target, version, openButton, gist = null 
       el('div', { class: 'sh-actions left' }, imp), inMsg);
   }
 
+  // Din vægt (kg): kun lokalt. Tom tekst fjerner den. Intet her rører Store'en.
+  function weightSection() {
+    let ls = null;
+    try { ls = localStorage; } catch { /* blokeret: saveWeight melder det */ }
+    const current = readWeight(ls);
+    const input = el('input', { type: 'text', id: 'setWeight', inputmode: 'decimal', autocomplete: 'off', maxlength: '6', placeholder: 'fx 70' });
+    input.value = current === null ? '' : String(current).replace('.', ',');
+    const msg = el('div', { class: 'msg', role: 'status' });
+    const apply = () => {
+      const r = saveWeight(ls, input.value);
+      if (!r.ok) { say(msg, r.error, true); return; }
+      say(msg, r.kg === null ? 'Vægten er fjernet fra denne enhed.' : 'Gemt på denne enhed.');
+      if (onWeight) onWeight(r.kg);
+    };
+    const save = el('button', { type: 'button', class: 'btn' }, 'Gem vægt');
+    save.addEventListener('click', apply);
+    input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); apply(); } });
+    return el('section', { id: 'setWeightSection' },
+      el('h4', null, 'Din vægt'),
+      el('p', { class: 'hint' }, `Bruges kun til at regne kost ud i gram og kcal. Vægten gemmes kun på denne enhed og sendes aldrig til GitHub, til kalenderen eller andre steder. Tilladt: ${WEIGHT_MIN} til ${WEIGHT_MAX} kg. Tomt felt fjerner den.`),
+      el('label', { class: 'field' }, 'Din vægt (kg)', input),
+      el('div', { class: 'sh-actions left' }, save), msg);
+  }
+
   function render() {
     refs = {};
     if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
@@ -219,7 +246,7 @@ export function mountSettings({ store, target, version, openButton, gist = null 
     else body = el('section', null, el('h4', null, 'Gemmes kun på denne enhed'), el('p', null, 'Her er der ingen synkronisering. Eksportér, hvis du vil tage din log med.'));
     dlg.replaceChildren(el('div', { class: 'sh set' },
       el('div', { class: 'sh-top' }, el('div', null, el('div', { class: 'sh-sport' }, 'Indstillinger'), el('h3', { id: 'setTitle' }, 'Synkronisering')), close),
-      refs.status, refs.detail, body, transferSection(),
+      refs.status, refs.detail, body, weightSection(), transferSection(),
       el('p', { class: 'ver' }, `Version ${version || ''}`)));
     paintStatus(s);
   }
