@@ -14,7 +14,7 @@ Aldrig gemt eller skrevet i logs: aktivitetens navn, beskrivelse, kort, rute, GP
 
 ## Engangsopsætning
 
-- [ ] **1. Opret Strava-appen** på https://www.strava.com/settings/api:
+- [ ] **1. Opret Strava-appen** på [strava.com/settings/api](https://www.strava.com/settings/api) (log ind i en browser først; det virker ikke i Strava-appen):
   - Navn: `IM2027 Sync` (Strava tillader ikke ordet "Strava" i navnet).
   - Kategori: *Training*.
   - Hjemmeside: `https://emilberntsen-ui.github.io/ironman-2027/`
