@@ -81,27 +81,28 @@ export const PH = {
 };
 
 // kind: start | build | rec | exam | race70 | post70 | taper | race
-// p: si = svømmeintervaller (m), sl = lang svøm (m), rE = roligt løb man., bT = cykel tir.,
-//    bW = cykel ons., rI = løbeintervaller tor., lr = lang cykel, br = brick, ln = langt løb (min)
+// p: si = svømmeintervaller (m), sl = lang svøm (m), rE = roligt løb tor. (0 = intet), bT = cykel fre., bW = cykel ons.,
+//    rI = løb tir., lr = lang cykel, br = brick, ln = langt løb (min); st = styrke tir. og fs = styrke fre. (min; standard: fasen / 20 om vinteren)
+// lv: 1–3 = blid opstart (INTRO) i stedet for fasens intervaller
 export const WEEKS = [
-  { k: 'start', ph: 'base1', note: 'Start med test, så zonerne passer. Tilmeld dig IRONMAN Copenhagen (søn. 22. aug. 2027) hurtigst muligt. Køge Jernmand (13. jun.) kan tilmeldes på sportstiming.dk/event/18710.' },
-  { k: 'build', ph: 'base1', p: { si: 1600, sl: 1800, rE: 25, bT: 60, bW: 30, rI: 40, lr: 90, br: 10, ln: 50 } },
-  { k: 'build', ph: 'base1', p: { si: 1800, sl: 2000, rE: 30, bT: 60, bW: 40, rI: 45, lr: 105, br: 10, ln: 55 } },
-  { k: 'build', ph: 'base1', p: { si: 2000, sl: 2200, rE: 30, bT: 60, bW: 45, rI: 45, lr: 120, br: 15, ln: 60 } },
-  { k: 'rec', ph: 'base1' },
-  { k: 'build', ph: 'base1', p: { si: 2000, sl: 2400, rE: 30, bT: 60, bW: 45, rI: 50, lr: 135, br: 15, ln: 65 }, note: 'Sidste uge før eksamen. Læg pas om morgenen, så læsedagen er fri.' },
+  { k: 'start', ph: 'base1', note: 'Blid startuge uden tests: kun rolige pas i Z1–Z2, så kroppen vænner sig til belastningen. Tilmeld dig IRONMAN Copenhagen (søn. 22. aug. 2027) hurtigst muligt. Køge Jernmand (13. jun.) kan tilmeldes på sportstiming.dk/event/18710.' },
+  { k: 'build', ph: 'base1', lv: 1, p: { si: 1200, sl: 1400, rE: 0, bT: 40, bW: 30, rI: 30, lr: 60, br: 10, ln: 45, st: 30, fs: 0 } },
+  { k: 'build', ph: 'base1', lv: 2, p: { si: 1400, sl: 1600, rE: 20, bT: 45, bW: 25, rI: 35, lr: 70, br: 10, ln: 45, st: 30, fs: 0 } },
+  { k: 'build', ph: 'base1', lv: 3, p: { si: 1400, sl: 1600, rE: 20, bT: 45, bW: 30, rI: 35, lr: 85, br: 10, ln: 50, st: 30, fs: 20 } },
+  { k: 'rec', ph: 'base1', note: 'Testuge: notér resultaterne og send dem, så opdateres pace-zonerne.' },
+  { k: 'build', ph: 'base1', p: { si: 1800, sl: 2000, rE: 25, bT: 55, bW: 30, rI: 40, lr: 95, br: 10, ln: 50 }, note: 'Sidste uge før eksamen. Læg pas om morgenen, så læsedagen er fri.' },
   { k: 'exam', ph: 'base1' },
   { k: 'exam', ph: 'base1' },
-  { k: 'build', ph: 'base1', p: { si: 2200, sl: 2500, rE: 30, bT: 75, bW: 45, rI: 50, lr: 150, br: 15, ln: 70 }, note: 'Juleferie: ekstra tid. Juleaften er torsdag: svøm om morgenen, og drop det rolige løb.' },
-  { k: 'build', ph: 'base1', p: { si: 2400, sl: 2800, rE: 35, bT: 75, bW: 45, rI: 50, lr: 165, br: 20, ln: 75 }, note: 'Nytårsaften er torsdag. Svømmehallen kan have kortere åbningstider i helligdagene.' },
+  { k: 'build', ph: 'base1', p: { si: 1800, sl: 2000, rE: 25, bT: 60, bW: 35, rI: 45, lr: 105, br: 10, ln: 55 }, note: 'Juleferie: ekstra tid. Juleaften er torsdag: svøm om morgenen, og drop det rolige løb.' },
+  { k: 'build', ph: 'base1', p: { si: 2000, sl: 2200, rE: 30, bT: 60, bW: 35, rI: 50, lr: 110, br: 10, ln: 60 }, note: 'Nytårsaften er torsdag. Svømmehallen kan have kortere åbningstider i helligdagene.' },
   { k: 'rec', ph: 'base1' },
-  { k: 'build', ph: 'base2', p: { si: 2200, sl: 2600, rE: 30, bT: 75, bW: 45, rI: 50, lr: 135, br: 15, ln: 70 } },
-  { k: 'build', ph: 'base2', p: { si: 2400, sl: 2800, rE: 35, bT: 75, bW: 45, rI: 55, lr: 150, br: 15, ln: 75 } },
-  { k: 'build', ph: 'base2', p: { si: 2400, sl: 2800, rE: 30, bT: 75, bW: 45, rI: 40, lr: 90, br: 0, ln: 0 }, event: ['10 km-løb', 'Første mellemmål. Fuld indsats. Torsdag kort, lørdag rolig.'], note: 'Find et 10 km-løb i slutningen af januar, eller løb en tidskørsel alene.' },
+  { k: 'build', ph: 'base2', p: { si: 2000, sl: 2200, rE: 30, bT: 60, bW: 40, rI: 50, lr: 120, br: 10, ln: 60 } },
+  { k: 'build', ph: 'base2', p: { si: 2200, sl: 2400, rE: 30, bT: 65, bW: 40, rI: 50, lr: 135, br: 15, ln: 65 } },
+  { k: 'build', ph: 'base2', p: { si: 2200, sl: 2400, rE: 30, bT: 60, bW: 40, rI: 40, lr: 90, br: 0, ln: 0 }, event: ['10 km-løb', 'Første mellemmål. Fuld indsats. Torsdag kort, lørdag rolig.'], note: 'Find et 10 km-løb i slutningen af januar, eller løb en tidskørsel alene.' },
   { k: 'rec', ph: 'base2', note: 'Nyt semester starter. Når skemaet ligger fast, så flyt dagene, men behold rækkefølgen hård/let.' },
-  { k: 'build', ph: 'base2', p: { si: 2500, sl: 3000, rE: 35, bT: 75, bW: 45, rI: 55, lr: 150, br: 20, ln: 80 } },
-  { k: 'build', ph: 'base2', p: { si: 2600, sl: 3000, rE: 35, bT: 75, bW: 45, rI: 55, lr: 165, br: 20, ln: 85 } },
-  { k: 'build', ph: 'base2', p: { si: 2600, sl: 3000, rE: 35, bT: 75, bW: 45, rI: 60, lr: 165, br: 20, ln: 90 } },
+  { k: 'build', ph: 'base2', p: { si: 2200, sl: 2600, rE: 30, bT: 70, bW: 40, rI: 50, lr: 135, br: 15, ln: 70 } },
+  { k: 'build', ph: 'base2', p: { si: 2400, sl: 2600, rE: 30, bT: 70, bW: 45, rI: 50, lr: 150, br: 15, ln: 75 } },
+  { k: 'build', ph: 'base2', p: { si: 2400, sl: 2800, rE: 30, bT: 75, bW: 45, rI: 55, lr: 150, br: 20, ln: 80 } },
   { k: 'rec', ph: 'base2', note: 'Book en bikefit nu, så du har tid til at vænne dig til positionen før de lange ture.' },
   { k: 'build', ph: 'build1', p: { si: 2800, sl: 3200, rE: 40, bT: 90, bW: 45, rI: 60, lr: 195, br: 25, ln: 95 } },
   { k: 'build', ph: 'build1', p: { si: 3000, sl: 3400, rE: 40, bT: 90, bW: 45, rI: 60, lr: 210, br: 25, ln: 100 } },
@@ -143,29 +144,42 @@ const S = {
 };
 
 const WINTER = ph => ph === 'base1' || ph === 'base2';
+// Uge 2–4 (lv 1–3): blid opstart i stedet for fasens intervaller. [tekst, hovedsætszone]; null = ingen hovedsæt, hele passet er roligt.
+// Uge 2 er roligt med strides, uge 3 de første lette intervaller, uge 4 lidt mere (og fasens styrke).
+const INTRO = [
+  { swim: ['6×100 m roligt, fokus på teknik (20 s pause)', null], bike: null, run: null, str: ['Styrke – let', 'Let: 2×8 squat, rumænsk dødløft, split squat og planke. Halv vægt, god teknik'] },
+  { swim: ['6×100 m i CSS-fart (20 s pause)', 'css'], bike: ['3×6 min sweet spot, 4 min pause', 'ss'], run: ['5×1 min Z4 / 2 min jog', 'z4'], str: ['Styrke', 'Basisløft 2×8, moderat vægt: squat, rumænsk dødløft, split squat, pull-ups, planke'] },
+  { swim: ['8×100 m (20 s pause)', 'css'], bike: ['3×8 min sweet spot, 4 min pause', 'ss'], run: ['5×2 min Z4 / 2 min jog', 'z4'], str: null },
+];
 const spinWhere = ph => WINTER(ph) ? 'Spinneren på arbejdspladsen, frokost eller lige efter arbejde' : 'Ude efter arbejde, eller spinneren på arbejdspladsen';
 
 // Ugen: man hvile/rolig svøm · tir løbeintervaller + styrke · ons lang svøm + let cykel
 // tor din faste morgensvømning (intervaller) + roligt løb · fre spinner med intervaller · lør lang cykel · søn langt løb
 function buildDays(w, pos) {
   const p = w.p, ph = PH[w.ph], i = (pos - 1) % 3;
-  const [swT, swZ] = ph.swim[i], [bkT, bkZ] = ph.bike[i], [rnT, rnZ] = ph.run[i];
+  const wk = w.lv ? INTRO[w.lv - 1] : null;
+  const [swT, swZ] = wk ? wk.swim : ph.swim[i], [bkT, bkZ] = wk ? wk.bike ?? [] : ph.bike[i], [rnT, rnZ] = wk ? wk.run ?? [] : ph.run[i];
   const [lgT, lgZ, lgM] = ph.long, [brT, brZ, brM] = ph.brick, [lrT, lrZ, lrM] = ph.lrun;
   const ow = w.ow ? ' Open water med våddragt, hvis vandet er over 15 °C, ellers i bassin.' : '';
   const spin = WINTER(w.ph) ? true : 'opt'; // fredagens cykel: spinneren om vinteren, ellers ude eller spinneren
   const mon = WINTER(w.ph) || w.ph === 'taper'
     ? [S.rest('Hviledag', 'Fri efter weekenden. Eventuelt 15 min mobilitet')]
     : [S.swim('Restitutionssvøm', 'Helt roligt, teknik og pull buoy. Spring over, hvis du er træt', 1500, 'easy')];
-  const fri = [S.bike('Cykel med intervaller', `Z2 med ${bkT}. ${spinWhere(w.ph)}`, p.bT, 'z2', x(bkZ, spin))];
-  if (WINTER(w.ph)) fri.push(S.str('Styrke (på arbejdet)', 'Let i træningsrummet: step-ups, enbens-dødløft, sidelæns planke, hofteløft', 20));
+  const fri = [bkT
+    ? S.bike('Cykel med intervaller', `Z2 med ${bkT}. ${spinWhere(w.ph)}`, p.bT, 'z2', x(bkZ, spin))
+    : S.bike('Rolig cykel', `Z2 hele vejen, jævn kadence 85–95. ${spinWhere(w.ph)}`, p.bT, 'z2', x(null, spin))];
+  const fs = p.fs ?? 20;
+  if (WINTER(w.ph) && fs) fri.push(S.str('Styrke (på arbejdet)', 'Let i træningsrummet: step-ups, enbens-dødløft, sidelæns planke, hofteløft', fs));
   const days = [
     mon,
-    [S.run('Løbeintervaller', `15 min opvarmning · ${rnT} · resten nedløb`, p.rI, 'easy', x(rnZ)),
-     S.str('Styrke', ph.strTue, ph.strTueMin)],
+    [rnT
+      ? S.run('Løbeintervaller', `15 min opvarmning · ${rnT} · resten nedløb`, p.rI, 'easy', x(rnZ))
+      : S.run('Roligt løb med strides', 'Z2, snakketempo. Afslut med 5 strides à 20 s: let og løbende, ikke sprint. Gå tilbage imellem', p.rI, 'z2'),
+     wk?.str ? S.str(wk.str[0], wk.str[1], p.st) : S.str('Styrke', ph.strTue, p.st ?? ph.strTueMin)],
     [S.swim('Lang svømmetur', 'Sammenhængende i jævnt tempo, pull buoy på sidste tredjedel.' + ow, p.sl, 'easy'),
      S.bike('Let cykeltur', 'Z1–Z2, høj kadence. cyklen på studiet eller ude', p.bW, 'easy', x(null, 'opt'))],
     [S.swim('Svømmeintervaller (morgen)', `Din faste torsdagssvømning: opv. 300 m · teknik 4×50 m · hovedsæt ${swT} · resten roligt`, p.si, 'easy', x(swZ)),
-     S.run('Roligt løb', 'Z2, snakketempo. Efter studiet', p.rE, 'z2')],
+     ...(p.rE ? [S.run('Roligt løb', 'Z2, snakketempo. Efter studiet', p.rE, 'z2')] : [])],
     fri,
     [S.bike('Lang cykeltur', lgT, p.lr, lgZ, x(lgM, w.ph === 'base2' ? 'opt' : null))],
     [],
@@ -199,7 +213,9 @@ function recDays(w) {
 }
 
 function examDays(w) {
-  const e = { run: 40, sl: 2000, si: 1500, bT: 60, lr: 105, ln: 60 };
+  const e = w.ph === 'base1' // eksamensugerne i december/januar er lettere end de senere
+    ? { run: 35, sl: 1600, si: 1400, bT: 50, lr: 90, ln: 60 }
+    : { run: 40, sl: 2000, si: 1500, bT: 60, lr: 105, ln: 60 };
   return [
     [S.rest('Hviledag', 'Fri')],
     [S.run('Kort løb med fart', '10 min opv. · 5×2 min Z4 · nedløb', e.run, 'easy', x('z4'))],
@@ -212,17 +228,16 @@ function examDays(w) {
 }
 
 function specialDays(w) {
-  if (w.k === 'start') return [
+  if (w.k === 'start') return [ // blid startuge (≈ 4,5 t): kun rolige Z1–Z2-pas og ingen tests (testene ligger i uge 5)
     [S.rest('Hviledag', 'Fri')],
-    [S.run('Løbetest', '15 min opv. · 30 min hårdt men jævnt · notér gennemsnitspace og gennemsnitspuls for de sidste 20 min (= tærskelfart og tærskelpuls)', 55, 'test'),
-     S.str('Styrke – introduktion', 'Find startvægte: squat, rumænsk dødløft, split squat, pull-ups, planke. 2×8, let', 35)],
-    [S.swim('Rolig svømning', 'Teknik og roligt', 1500, 'easy'),
-     S.bike('Let cykeltur', 'Z1–Z2', 40, 'easy', x(null, 'opt'))],
-    [S.swim('Svømmetest (morgen)', 'Opv. 400 m · 400 m all-out · 5 min pause · 200 m all-out. Noter tiderne, så regnes CSS-farten ud: (tid400 − tid200) / 2 pr. 100 m', 1400, 'test'),
-     S.run('Roligt løb', 'Z2, snakketempo', 25, 'z2')],
-    [S.bike('Cykeltest', 'Opv. 20 min · 20 min all-out, notér gennemsnitsfart og puls. Brug en rute og en cykel, du kan gentage', 60, 'test')],
-    [S.bike('Rolig tur', 'Z2', 90, 'z2', x(null, 'opt')), S.run('Brick-løb', 'Lige efter cyklen, meget roligt', 10, 'easy')],
-    [S.run('Roligt løb', 'Z2, snakketempo', 45, 'z2')],
+    [S.run('Roligt løb', 'Z2, snakketempo. Gå gerne 1 min, hvis du får brug for det', 25, 'z2'),
+     S.str('Styrke – introduktion', 'Let: find startvægte på squat, rumænsk dødløft, split squat og planke. 2×8, langt fra udmattelse', 25)],
+    [S.swim('Rolig svømning', 'Teknik og roligt, ingen intervaller', 1200, 'easy'),
+     S.bike('Let cykeltur', 'Z1–Z2, høj kadence', 25, 'easy', x(null, 'opt'))],
+    [S.swim('Rolig svømning (morgen)', 'Din faste torsdagssvømning, men kun roligt: teknik og lange, afslappede tag', 1000, 'easy')],
+    [S.bike('Rolig spinner', `Z1–Z2, jævn kadence 85–95. ${spinWhere(w.ph)}`, 40, 'easy', x(null, true))],
+    [S.bike('Rolig tur', 'Z2, jævnt. Kort og rolig', 60, 'z2', x(null, 'opt')), S.run('Brick-løb', 'Lige efter cyklen, 10 min meget roligt', 10, 'easy')],
+    [S.run('Roligt løb', 'Z2, snakketempo', 40, 'z2')],
   ];
   if (w.k === 'race70') return [
     [S.bike('Cykel', 'Z2 med 3×5 min racefart', 60, 'z2', x('ss'))],

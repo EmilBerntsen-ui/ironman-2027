@@ -176,7 +176,7 @@ test('søjlerne har tilgængelige navne, der er identiske med den synlige toolti
 
 // ---- Strava-pas i detaljevisningen (docs/strava.md §5) ----
 
-const STRAVA_ENTRY = { done: true, updatedAt: '2026-11-06T12:35:00.000Z', dev: 'strava', at: '2026-11-06T11:30:00.000Z', min: 62, src: 'strava', extId: '12345678901', sig: 'bike:Cykel med intervaller', dist: 10234, hr: 148 };
+const STRAVA_ENTRY = { done: true, updatedAt: '2026-11-06T12:35:00.000Z', dev: 'strava', at: '2026-11-06T11:30:00.000Z', min: 62, src: 'strava', extId: '12345678901', sig: 'bike:Rolig cykel', dist: 10234, hr: 148 };
 const openSheetOf = (app, key) => app.doc.fire('click', { target: { closest: sel => (sel === '[data-open]' ? { dataset: { open: key } } : null) } });
 const appWith = entry => loadApp({ storage: memoryStorage({ 'im2027-progress-v2': JSON.stringify({ v: 2, weeks: { u02: { '4-0': entry } } }) }) });
 
@@ -184,7 +184,7 @@ test('Strava-pas: arket viser "Fra Strava · 10,2 km · ⌀ 148 bpm" og et sikke
   const app = appWith(STRAVA_ENTRY);
   openSheetOf(app, 'u02-4-0');
   const html = app.$('sh').innerHTML;
-  assert.match(html, /<h3 id="shTitle">Cykel med intervaller<\/h3>/);
+  assert.match(html, /<h3 id="shTitle">Rolig cykel<\/h3>/);
   assert.match(html, /<p class="desc sh-strava">Fra Strava · 10,2 km · ⌀ 148 bpm · <a href="https:\/\/www\.strava\.com\/activities\/12345678901" target="_blank" rel="noopener noreferrer">Se på Strava<\/a><\/p>/);
   assert.ok(html.indexOf('sh-facts') < html.indexOf('sh-strava') && html.indexOf('sh-strava') < html.indexOf('<form'), 'under faktaboksene, over formularen');
 });

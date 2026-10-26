@@ -47,11 +47,69 @@ test('alle pas uden for hvile har minutter > 0 og TSS > 0', () => {
   }
 });
 
-test('ugentlige timer ligger mellem 4 og 17', () => {
-  for (const w of weeks) {
-    const h = w.total / 60;
-    assert.ok(h >= 4 && h <= 17, `uge ${w.n}: ${h.toFixed(1)} t`);
+const hours = w => w.total / 60;
+
+test('ugentlige timer ligger mellem 3,5 og 17, uge 1 mellem 4 og 5 og uge 10 højst 9', () => {
+  for (const w of weeks) assert.ok(hours(w) >= 3.5 && hours(w) <= 17, `uge ${w.n}: ${hours(w).toFixed(1)} t`);
+  assert.ok(hours(weeks[0]) >= 4 && hours(weeks[0]) <= 5, `uge 1: ${hours(weeks[0]).toFixed(1)} t`);
+  assert.ok(hours(weeks[9]) <= 9, `uge 10: ${hours(weeks[9]).toFixed(1)} t`);
+});
+
+test('milder start: timer pr. uge i uge 1–11 følger det godkendte forløb', () => {
+  const want = { 1: [4, 5], 2: [4.7, 5.3], 3: [5.5, 6], 4: [6.2, 6.8], 5: [5, 6], 6: [7.2, 7.8], 7: [4.7, 5.3], 8: [4.7, 5.3], 9: [7.7, 8.3], 10: [8.2, 8.8], 11: [5, 6] };
+  for (const [n, [lo, hi]] of Object.entries(want)) assert.ok(hours(weeks[n - 1]) >= lo && hours(weeks[n - 1]) <= hi, `uge ${n}: ${hours(weeks[n - 1]).toFixed(2)} t, ventet ${lo}–${hi}`);
+  assert.deepEqual(weeks.slice(0, 11).map(w => w.k), ['start', 'build', 'build', 'build', 'rec', 'build', 'exam', 'exam', 'build', 'build', 'rec']);
+});
+
+test('grundform 2 (uge 12–19): belastningsugerne ligger på 8,5–10,5 t, uden spring op i uge 20', () => {
+  for (const n of [12, 13, 16, 17, 18]) assert.ok(hours(weeks[n - 1]) >= 8.5 && hours(weeks[n - 1]) <= 10.5, `uge ${n}: ${hours(weeks[n - 1]).toFixed(2)} t`);
+  assert.ok(hours(weeks[13]) < hours(weeks[12]), 'ugen med 10 km-løbet er lettere');
+  for (const n of [15, 19]) assert.ok(hours(weeks[n - 1]) < 7, `uge ${n} er en let uge`);
+});
+
+test('ingen spring i belastningen: uge 2–19 højst 16 % over de foregående belastningsuger (de seneste 5 uger)', () => {
+  const loaded = w => w.k === 'start' || w.k === 'build';
+  for (let i = 1; i < 19; i++) {
+    if (!loaded(weeks[i])) continue;
+    const prev = weeks.slice(Math.max(0, i - 5), i).filter(loaded).map(w => w.total);
+    assert.ok(weeks[i].total <= 1.16 * Math.max(...prev), `uge ${i + 1}: ${weeks[i].total} min mod ${Math.max(...prev)} min`);
   }
+});
+
+test('uge 1 er en blid startuge uden tests; uge 5 er testugen med løbe-, svømme- og cykeltest', () => {
+  const titles = w => w.days.flat().map(s => s.t);
+  const tests = w => w.days.flat().filter(s => s.z === 'test').map(s => s.t);
+  assert.deepEqual(tests(weeks[0]), []);
+  assert.ok(!titles(weeks[0]).some(t => /test/i.test(t)));
+  assert.deepEqual(tests(weeks[4]), ['Løbetest', 'Svømmetest (morgen)', 'Cykeltest']);
+  for (const n of [2, 3, 4, 6, 7, 8, 9, 10]) assert.deepEqual(tests(weeks[n - 1]), [], `uge ${n}`);
+  // uge 1: kun rolige Z1–Z2-pas, styrke som introduktion
+  for (const s of weeks[0].days.flat()) {
+    assert.ok(['rest', 'str', 'easy', 'z2'].includes(s.z), `${s.t}: ${s.z}`);
+    assert.ok(!s.main, s.t);
+  }
+  assert.equal(weeks[0].days[0][0].s, 'rest', 'mandag er stadig hviledag');
+  assert.equal(weeks[0].days[3].length, 1);
+  assert.equal(weeks[0].days[3][0].s, 'swim');
+  assert.equal(weeks[0].days[4][0].ind, true, 'fredagens spinner er rolig og indendørs');
+  assert.equal(weeks[0].days[5][1].t, 'Brick-løb');
+  assert.equal(weeks[0].days[5][1].m, 10);
+  assert.equal(weeks[0].days[6][0].m, 40);
+  assert.match(weeks[0].note, /uden tests/);
+  assert.match(weeks[0].note, /Tilmeld dig IRONMAN Copenhagen/);
+  assert.match(weeks[4].note, /^Testuge: notér resultaterne og send dem, så opdateres pace-zonerne/);
+});
+
+test('uge 2–4 trapper op fra roligt med strides til de første lette intervaller', () => {
+  const [w2, w3, w4] = [weeks[1], weeks[2], weeks[3]];
+  assert.equal(w2.days[1][0].t, 'Roligt løb med strides');
+  assert.ok(w2.days.flat().every(s => !s.main), 'uge 2 har ingen intervaller');
+  assert.equal(w3.days[1][0].t, 'Løbeintervaller');
+  assert.equal(w3.days[1][0].main, 'z4');
+  assert.match(w3.days[1][0].d, /5×1 min Z4/);
+  assert.equal(w3.days[4][0].main, 'ss');
+  assert.equal(w4.days[1][0].main, 'z4');
+  assert.match(w4.days[1][0].d, /5×2 min Z4/);
 });
 
 test('uge 20–43 er uændrede: minutter og antal pas pr. uge', () => {

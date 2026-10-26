@@ -134,9 +134,9 @@ test('vindue og plan: uden for [i dag − L, i dag], før planstart og efter lø
   assert.deepEqual(r1.stats, { window: 1, matched: 0, healed: 0, occupied: 0, extras: 1, known: 0 });
 
   const old = raw({ id: 32, type: 'Run', start: '2026-11-03T16:00:00Z', elapsed: 2400 });      // tirsdag, uden for tre dages vindue
-  const inside = raw({ id: 33, type: 'Run', start: '2026-11-05T16:00:00Z', elapsed: 1500 });   // torsdag
+  const inside = raw({ id: 33, type: 'Run', start: '2026-11-08T09:00:00Z', elapsed: 1500 });   // søndag
   const r2 = run([old, inside], { today: '2026-11-08', lookbackDays: 3 });
-  assert.deepEqual(Object.keys(flat(r2.writes)), [`u02.${keyOf('u02', 'Roligt løb')}`]);
+  assert.deepEqual(Object.keys(flat(r2.writes)), [`u02.${keyOf('u02', 'Langt løb')}`]);
   assert.equal(r2.stats.window, 1, 'kun aktiviteter i vinduet tælles');
   const r3 = run([old, inside], { today: '2026-11-08', lookbackDays: 7 });
   assert.equal(Object.keys(flat(r3.writes)).length, 2);
@@ -151,11 +151,11 @@ test('vindue og plan: uden for [i dag − L, i dag], før planstart og efter lø
 
 test('pas fra Strava: nøjagtige felter, updatedAt = aktivitetens slut, dev strava, sig; fast punkt og stabil serialisering', () => {
   const r = run([raw({ id: 11111111101, type: 'VirtualRide', start: '2026-11-06T11:30:00Z', elapsed: 3720, moving: 3600, dist: 31500.2, hr: 141.6 })]);
-  const key = keyOf('u02', 'Cykel med intervaller');
+  const key = keyOf('u02', 'Rolig cykel');
   assert.equal(key, '4-0');
   assert.deepEqual(r.writes, { u02: { [key]: {
     done: true, updatedAt: '2026-11-06T12:32:00.000Z', dev: 'strava', at: '2026-11-06T11:30:00.000Z', min: 60,
-    src: 'strava', extId: '11111111101', sig: 'bike:Cykel med intervaller', dist: 31500, hr: 142,
+    src: 'strava', extId: '11111111101', sig: 'bike:Rolig cykel', dist: 31500, hr: 142,
   } } });
   const e = r.writes.u02[key];
   assert.deepEqual(normalizeEntry(e), e, 'fast punkt af normalizeEntry');
@@ -178,10 +178,10 @@ test('pas fra Strava: uden afstand og puls udelades felterne; svømning med elap
 test('uge 2 fra fixturen: fredag VirtualRide, lørdag brick (cykel + løb), tirsdag styrke, onsdag svøm; gåtur er ekstra', () => {
   const r = matchActivities({ weeks, progress: {}, activities: picked(fixture('activities-week2.json')), ledger: {}, today: '2026-11-08', lookbackDays: 7 });
   assert.deepEqual(Object.keys(flat(r.writes)).sort(), ['u01.6-0', 'u02.1-1', 'u02.2-0', 'u02.4-0', 'u02.5-0', 'u02.5-1']);
-  assert.equal(r.writes.u02['4-0'].sig, 'bike:Cykel med intervaller');
+  assert.equal(r.writes.u02['4-0'].sig, 'bike:Rolig cykel');
   assert.equal(r.writes.u02['5-0'].sig, 'bike:Lang cykeltur');
   assert.equal(r.writes.u02['5-1'].sig, 'run:Brick-løb');
-  assert.equal(r.writes.u02['1-1'].sig, 'str:Styrke');
+  assert.equal(r.writes.u02['1-1'].sig, 'str:Styrke – let');
   assert.ok(!('dist' in r.writes.u02['1-1']));
   assert.equal(r.writes.u02['1-1'].hr, 104);
   assert.deepEqual(r.stats, { window: 7, matched: 6, healed: 0, occupied: 0, extras: 1, known: 0 });
@@ -245,15 +245,16 @@ test('flest mulige par slår den billigste parring: en aktivitet der kun passer 
 test('aktiviteter under 5 minutter eller under 25 % af passet ignoreres og tælles som ekstra', () => {
   const r = run([
     raw({ id: 81, type: 'Run', start: '2026-11-07T10:05:00Z', elapsed: 4 * 60 }),          // 4 min: for kort, selv om passet (brick, 10 min) ville tillade det
-    raw({ id: 82, type: 'Run', start: '2026-11-08T10:05:00Z', elapsed: 12 * 60 }),         // søndag: langt løb på 50 min, 12 min = 24 %
+    raw({ id: 82, type: 'Run', start: '2026-11-08T10:05:00Z', elapsed: 11 * 60 }),         // søndag: langt løb på 45 min, 11 min = 24 %
   ]);
   assert.deepEqual(r.writes, {});
   assert.equal(r.stats.extras, 2);
   assert.deepEqual(r.ledger, {});
-  const ok = run([raw({ id: 83, type: 'Run', start: '2026-11-08T10:05:00Z', elapsed: 13 * 60 })]); // 26 %
+  const ok = run([raw({ id: 83, type: 'Run', start: '2026-11-08T10:05:00Z', elapsed: 12 * 60 })]); // 27 %
   assert.equal(ok.writes.u02['6-0'].extId, '83');
-  const exactly = run([raw({ id: 84, type: 'Run', start: '2026-11-08T10:05:00Z', elapsed: 750 })]); // 12,5 min = 25 % præcis (afrundet til 13 min)
-  assert.equal(exactly.writes.u02['6-0'].min, 13);
+  const exactly = matchActivities({ weeks: custom([sess('run', 'Løb', 48)]), progress: {}, ledger: {}, today: '2026-11-02', lookbackDays: 1,
+    activities: picked([raw({ id: 84, type: 'Run', start: '2026-11-02T10:05:00Z', elapsed: 720 })]) }); // 12 min = 25 % af 48 præcis
+  assert.equal(exactly.writes.u02['0-0'].min, 12);
 });
 
 test('ukendte sportstyper og dage uden pas i gruppen er ekstra', () => {

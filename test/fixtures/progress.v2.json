@@ -5,7 +5,7 @@
   "exportedAt": "2026-11-02T20:00:00.000Z",
   "weeks": {
     "u01": {
-      "1-0": { "at": "2026-10-27T05:30:00.000Z", "dev": "fixture1", "done": true, "min": 42, "note": "HEMMELIG-NOTE-XYZ", "rpe": 9, "sig": "run:Løbetest", "updatedAt": "2026-10-27T06:12:00.000Z" },
+      "1-0": { "at": "2026-10-27T05:30:00.000Z", "dev": "fixture1", "done": true, "min": 42, "note": "HEMMELIG-NOTE-XYZ", "rpe": 9, "sig": "run:Roligt løb", "updatedAt": "2026-10-27T06:12:00.000Z" },
       "1-1": { "at": "2026-10-27T06:30:00.000Z", "dev": "fixture1", "done": true, "note": "HEMMELIG-NOTE-XYZ", "rpe": 3, "updatedAt": "2026-10-27T07:05:00.000Z" },
       "2-0": { "dev": "fixture2", "done": false, "updatedAt": "2026-10-28T09:00:00.000Z" },
       "2-1": { "at": "2026-10-28T15:00:00.000Z", "dev": "strava", "done": true, "min": 90, "src": "strava", "extId": "12345678901", "sig": "bike:Let cykeltur", "dist": 98765, "hr": 187, "updatedAt": "2026-10-28T16:40:00.000Z" }

@@ -12,7 +12,7 @@ const fixture = readFileSync(fileURLToPath(new URL('./fixtures/progress.v2.json'
 const progress = parseAny(fixture);
 
 // Syntetisk skema (ikke de rigtige tider): to pas samme dag, en kort dagsliste og et løb.
-const SCHEDULE = { days: [['06:15'], ['06:15', '06:40'], ['13:00'], ['06:15', '18:20'], ['12:30'], ['09:45'], ['10:15']], race: '06:30' };
+const SCHEDULE = { days: [['06:15'], ['06:15', '06:30'], ['13:00'], ['06:15', '18:20'], ['12:30'], ['09:45'], ['10:15']], race: '06:30' };
 
 const unfold = ics => ics.replace(/\r\n /g, '');
 const events = ics => unfold(ics).split('BEGIN:VEVENT\r\n').slice(1).map(b => 'BEGIN:VEVENT\r\n' + b.split('END:VEVENT')[0] + 'END:VEVENT');
@@ -23,7 +23,7 @@ const marked = buildIcs(weeks, now, { progress });
 
 test('gennemført pas får ✅ og "Gennemført · 42 min" som første beskrivelseslinje', () => {
   const ev = byUid(marked).get('u01-1-0@ironman2027');
-  assert.match(ev, /^SUMMARY:✅ 🏃 Løbetest \(55 min\)$/m);
+  assert.match(ev, /^SUMMARY:✅ 🏃 Roligt løb \(25 min\)$/m);
   assert.match(ev, /^DESCRIPTION:Gennemført · 42 min\\n\\n/m);
   assert.match(byUid(marked).get('u01-2-1@ironman2027'), /^DESCRIPTION:Gennemført · 90 min\\n\\n/m);
 });
@@ -67,7 +67,7 @@ test('kun gennemførte pas ændres, og kun i SUMMARY og DESCRIPTION; UID-sættet
 test('noter, RPE og andre felter fra fremdriften lækker aldrig ind i .ics', () => {
   assert.ok(fixture.includes('HEMMELIG-NOTE-XYZ'));
   for (const text of [marked, unfold(marked), buildIcs(weeks, now, { progress, schedule: SCHEDULE })]) {
-    for (const secret of ['HEMMELIG', 'NOTE-XYZ', 'fixture1', 'fixture2', 'RPE', 'rpe', 'run:Løbetest']) assert.ok(!text.includes(secret), secret);
+    for (const secret of ['HEMMELIG', 'NOTE-XYZ', 'fixture1', 'fixture2', 'RPE', 'rpe', 'run:Roligt løb']) assert.ok(!text.includes(secret), secret);
   }
 });
 
@@ -127,13 +127,13 @@ test('med skema: timede begivenheder i Europe/Copenhagen, VTIMEZONE med, løb ef
 
 test('med skema: pas nr. 2 starter på sin tid, men aldrig før forrige pas er slut; manglende tid = lige efter forrige', () => {
   const ev = byUid(buildIcs(weeks, now, { schedule: SCHEDULE }));
-  // tirsdag u01: løbetest 55 min fra 06:15 (slut 07:10), styrke ønsket 06:40 → 07:10
+  // tirsdag u01: løb 25 min fra 06:15 (slut 06:40), styrke ønsket 06:30 → 06:40
   assert.equal(field(ev.get('u01-1-0@ironman2027'), 'DTSTART;TZID=Europe/Copenhagen'), '20261027T061500');
-  assert.equal(field(ev.get('u01-1-1@ironman2027'), 'DTSTART;TZID=Europe/Copenhagen'), '20261027T071000');
-  // onsdag har kun én tid i skemaet: pas nr. 2 (40 min) følger lige efter pas nr. 1 (35 min fra 13:00)
-  assert.equal(field(ev.get('u01-2-1@ironman2027'), 'DTSTART;TZID=Europe/Copenhagen'), '20261028T133500');
-  // lørdag u01: brick-løb (pas 2) har ingen tid og følger lige efter 90 min cykling fra 09:45
-  assert.equal(field(ev.get('u01-5-1@ironman2027'), 'DTSTART;TZID=Europe/Copenhagen'), '20261031T111500');
+  assert.equal(field(ev.get('u01-1-1@ironman2027'), 'DTSTART;TZID=Europe/Copenhagen'), '20261027T064000');
+  // onsdag har kun én tid i skemaet: pas nr. 2 (25 min) følger lige efter pas nr. 1 (25 min fra 13:00)
+  assert.equal(field(ev.get('u01-2-1@ironman2027'), 'DTSTART;TZID=Europe/Copenhagen'), '20261028T132500');
+  // lørdag u01: brick-løb (pas 2) har ingen tid og følger lige efter 60 min cykling fra 09:45
+  assert.equal(field(ev.get('u01-5-1@ironman2027'), 'DTSTART;TZID=Europe/Copenhagen'), '20261031T104500');
 });
 
 test('med skema: pas uden kendt starttid bliver heldagsbegivenhed (og VTIMEZONE kun hvis noget er timet)', () => {
@@ -150,8 +150,8 @@ test('med skema: pas uden kendt starttid bliver heldagsbegivenhed (og VTIMEZONE 
 test('med skema: et pas der løber over midnat får gyldigt klokkeslæt på næste dato', () => {
   const late = { days: [['23:30'], ['23:30'], ['23:30'], ['23:30'], ['23:30'], ['23:30'], ['23:30']], race: '23:30' };
   const ev = byUid(buildIcs(weeks, now, { schedule: late }));
-  // u01 tirsdag: løbetest fra 23:30 (55 min), styrke ønsket 23:30 → starter 24:25 = onsdag 00:25
-  assert.equal(field(ev.get('u01-1-1@ironman2027'), 'DTSTART;TZID=Europe/Copenhagen'), '20261028T002500');
+  // u01 lørdag: rolig tur fra 23:30 (60 min), brick-løbet følger lige efter → starter 24:30 = søndag 00:30
+  assert.equal(field(ev.get('u01-5-1@ironman2027'), 'DTSTART;TZID=Europe/Copenhagen'), '20261101T003000');
   assert.ok(!/T24\d\d\d\d/.test(buildIcs(weeks, now, { schedule: late })));
 });
 
