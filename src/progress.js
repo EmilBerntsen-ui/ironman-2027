@@ -7,7 +7,11 @@
  *              note?: string, src?: 'manual'|'strava', extId?: string, sig?: string,
  *              dist?: number, hr?: number, pace?: number }} Entry   dist = meter (Strava), hr = gennemsnitspuls i slag/min (Strava),
  *              pace = faktisk fart: sek. pr. km (løb), sek. pr. 100 m (svøm) eller km/t (cykel); sporten kendes af passet, se src/pace.js */
-/** @typedef {Record<string, Entry>} Week            sessionKey → Entry */
+/** @typedef {{ day: number, sport: 'swim'|'bike'|'run'|'str'|'other', min: number, source: 'manual'|'strava'|'intervals', updatedAt: string,
+ *              dev?: string, title?: string, pace?: number, dist?: number, hr?: number, rpe?: number, note?: string, activityId?: string }
+ *            | { deleted: true, updatedAt: string, dev?: string }} Extra   ekstra (uplanlagt) træning under nøglen `x-<id>`; deleted = gravsten.
+ *              day = 0–6 (mandag = 0) i ugen dokumentet gælder; pace/dist/hr som i Entry; source/activityId: hvor den kom fra (Strava eller intervals.icu) */
+/** @typedef {Record<string, Entry|Extra>} Week      sessionKey ("1-0") → Entry, ekstra ("x-<id>") → Extra */
 /** @typedef {Record<string, Week>} Progress         weekId → Week */
 
 export const FORMAT = 'ironman-2027-progress';
@@ -18,10 +22,15 @@ export const GIST_DESCRIPTION = 'Ironman 2027 – træningslog (redigér ikke ma
 
 const WEEK_ID_RE = /^u\d{2}$/;
 const SESSION_KEY_RE = /^[0-6]-\d{1,2}$/;
+const EXTRA_KEY_RE = /^x-[a-z0-9]{3,24}$/;
 const WEEK_FILE_RE = /^(u\d{2})\.json$/;
 const UNKNOWN_KEY_RE = /^[A-Za-z][\w-]{0,39}$/;
 const MAX_MS = Date.parse('9999-12-31T23:59:59.999Z');
 const KNOWN = new Set(['done', 'updatedAt', 'dev', 'at', 'min', 'rpe', 'note', 'src', 'extId', 'sig', 'dist', 'hr', 'pace']);
+const EXTRA_KNOWN = new Set(['deleted', 'updatedAt', 'dev', 'day', 'sport', 'title', 'min', 'rpe', 'note', 'source', 'activityId', 'dist', 'hr', 'pace']);
+
+export const EXTRA_SPORTS = Object.freeze(['swim', 'bike', 'run', 'str', 'other']);
+export const EXTRA_SOURCES = Object.freeze(['manual', 'strava', 'intervals']);
 
 const isObj = v => typeof v === 'object' && v !== null && !Array.isArray(v);
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -34,6 +43,23 @@ function isoOrNull(v) {
   return new Date(t).toISOString();
 }
 const cleanStr = (v, max) => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : null);
+// Tekst klippet til `max` tegn uden at dele et surrogatpar; null hvis den er tom eller ikke tekst.
+function cutText(v, max) {
+  if (typeof v !== 'string') return null;
+  let n = v.slice(0, max);
+  if (/[\uD800-\uDBFF]$/.test(n)) n = n.slice(0, -1);
+  return n || null;
+}
+// Fremadkompatibilitet: ukendte felter overlever kun som korte primitiver (højst 16 stk.).
+function keepUnknown(raw, e, known) {
+  let extra = 0;
+  for (const k of Object.keys(raw)) {
+    if (known.has(k) || !UNKNOWN_KEY_RE.test(k) || extra >= 16) continue;
+    const v = raw[k];
+    if ((typeof v === 'string' && v.length <= 200) || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))) { e[k] = v; extra++; }
+  }
+  return e;
+}
 
 // ---- Enkeltpas ----
 
@@ -58,42 +84,93 @@ export function normalizeEntry(raw) {
   if (at) e.at = at;
   if (Number.isInteger(raw.min) && raw.min >= 0 && raw.min <= 900) e.min = raw.min;
   if (Number.isInteger(raw.rpe) && raw.rpe >= 1 && raw.rpe <= 10) e.rpe = raw.rpe;
-  if (typeof raw.note === 'string') {
-    let n = raw.note.slice(0, 1000);
-    if (/[\uD800-\uDBFF]$/.test(n)) n = n.slice(0, -1); // del ikke et surrogatpar
-    if (n) e.note = n;
-  }
+  const note = cutText(raw.note, 1000); if (note) e.note = note;
   if (raw.src === 'manual' || raw.src === 'strava') e.src = raw.src;
   const extId = cleanStr(raw.extId, 64); if (extId) e.extId = extId;
   const sig = cleanStr(raw.sig, 120); if (sig) e.sig = sig;
   if (Number.isInteger(raw.dist) && raw.dist >= 0 && raw.dist <= 1000000) e.dist = raw.dist; // meter (Strava)
   if (Number.isInteger(raw.hr) && raw.hr >= 30 && raw.hr <= 250) e.hr = raw.hr;              // gennemsnitspuls (Strava)
   if (typeof raw.pace === 'number' && Number.isFinite(raw.pace) && raw.pace >= 1 && raw.pace <= 3600) e.pace = Math.round(raw.pace * 10) / 10; // faktisk fart (sek./km, sek./100 m, km/t)
-
-  // Fremadkompatibilitet: ukendte felter overlever kun som korte primitiver (højst 16 stk.).
-  let extra = 0;
-  for (const k of Object.keys(raw)) {
-    if (KNOWN.has(k) || !UNKNOWN_KEY_RE.test(k) || extra >= 16) continue;
-    const v = raw[k];
-    if ((typeof v === 'string' && v.length <= 200) || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))) { e[k] = v; extra++; }
-  }
-  return e;
+  return keepUnknown(raw, e, KNOWN);
 }
 
 export const isDone = e => e?.done === true;
 
+// ---- Ekstra træning (uplanlagt): nøgle `x-<id>` i den uges dokument, hvor datoen ligger ----
+export const isSessionKey = k => typeof k === 'string' && SESSION_KEY_RE.test(k);
+export const isExtraKey = k => typeof k === 'string' && EXTRA_KEY_RE.test(k);
+// En levende ekstra (ikke en gravsten).
+export const isExtra = e => isObj(e) && e.deleted !== true && Number.isInteger(e.day) && typeof e.sport === 'string';
+
+// Ny nøgle: `x-` + tid (base36) + to tilfældige tegn. random og now kan angives i tests.
+export function newExtraKey(now = Date.now(), random = Math.random) {
+  const t = (now instanceof Date ? now.getTime() : Number(now)) || 0;
+  return 'x-' + Math.max(0, Math.floor(t)).toString(36) + Math.floor(random() * 1296).toString(36).padStart(2, '0');
+}
+
+// Valider og normalisér én ekstra fra ukendt kilde. En gravsten (`deleted: true`) mister alle detaljer. En levende ekstra skal have
+// day (0–6), sport og min (hele minutter 1–900), ellers er den ugyldig (null). source mangler = 'manual'.
+export function normalizeExtra(raw) {
+  if (!isObj(raw)) return null;
+  const updatedAt = isoOrNull(raw.updatedAt) || EPOCH;
+  const dev = cleanStr(raw.dev, 16);
+  if (raw.deleted === true) {
+    const t = { deleted: true, updatedAt };
+    if (dev) t.dev = dev;
+    return t;
+  }
+  if (!Number.isInteger(raw.day) || raw.day < 0 || raw.day > 6) return null;
+  if (!EXTRA_SPORTS.includes(raw.sport)) return null;
+  if (!Number.isInteger(raw.min) || raw.min < 1 || raw.min > 900) return null;
+  const e = { day: raw.day, sport: raw.sport, min: raw.min, source: EXTRA_SOURCES.includes(raw.source) ? raw.source : 'manual', updatedAt };
+  if (dev) e.dev = dev;
+  const title = cutText(raw.title, 80); if (title) e.title = title;
+  if (Number.isInteger(raw.rpe) && raw.rpe >= 1 && raw.rpe <= 10) e.rpe = raw.rpe;
+  const note = cutText(raw.note, 1000); if (note) e.note = note;
+  const activityId = cleanStr(raw.activityId, 64); if (activityId) e.activityId = activityId;
+  if (Number.isInteger(raw.dist) && raw.dist >= 0 && raw.dist <= 1000000) e.dist = raw.dist;
+  if (Number.isInteger(raw.hr) && raw.hr >= 30 && raw.hr <= 250) e.hr = raw.hr;
+  if (typeof raw.pace === 'number' && Number.isFinite(raw.pace) && raw.pace >= 1 && raw.pace <= 3600) e.pace = Math.round(raw.pace * 10) / 10;
+  return keepUnknown(raw, e, EXTRA_KNOWN);
+}
+
+// Alle levende ekstra i en Progress, sorteret efter uge, dag og nøgle. dayIdx = dagen regnet fra planstart (uge-id 'u01' = uge 1).
+// → [{ weekId, key, e, dayIdx }]
+export function liveExtras(progress) {
+  const out = [];
+  for (const weekId of Object.keys(progress || {}).sort()) {
+    const m = WEEK_ID_RE.exec(weekId), week = progress[weekId];
+    if (!m || !isObj(week)) continue;
+    for (const key of Object.keys(week).sort()) {
+      if (isExtraKey(key) && isExtra(week[key])) out.push({ weekId, key, e: week[key], dayIdx: (Number(weekId.slice(1)) - 1) * 7 + week[key].day });
+    }
+  }
+  return out.sort((a, b) => a.dayIdx - b.dayIdx || (a.e.updatedAt < b.e.updatedAt ? -1 : a.e.updatedAt > b.e.updatedAt ? 1 : a.key < b.key ? -1 : 1));
+}
+
+// En uges planlagte pas uden ekstra (nøgler som "1-0").
+export function sessionsOnly(week) {
+  const out = {};
+  for (const k of Object.keys(week || {})) if (SESSION_KEY_RE.test(k)) out[k] = week[k];
+  return out;
+}
+
 // Signatur for det planlagte pas ved logning; bruges til at opdage forskudte pas senere.
 export const sessionSig = s => `${s.s}:${s.t}`;
 
-// Byg et nyt, stemplet pas. `patch` = felterne for et gennemført pas (eller null/done:false = gravsten).
-// Hele detaljesættet erstattes af `patch`; kun `at` (første gang gennemført) arves fra `prev`.
 // updatedAt = max(now, prev.updatedAt + 1 ms), så en redigering altid slår den version den bygger på, selv med skæv ur.
-export function stampEntry(patch, prev, { now, dev } = {}) {
+function stampTime(prev, now, who) {
   const nowMs = now instanceof Date ? now.getTime() : Date.parse(now);
-  if (!Number.isFinite(nowMs)) throw new TypeError('stampEntry: ugyldigt now');
+  if (!Number.isFinite(nowMs)) throw new TypeError(`${who}: ugyldigt now`);
   const prevIso = prev ? isoOrNull(prev.updatedAt) : null;
   const ms = Math.min(MAX_MS, Math.max(nowMs, prevIso ? Date.parse(prevIso) + 1 : -Infinity));
-  const updatedAt = new Date(ms).toISOString();
+  return { nowMs, updatedAt: new Date(ms).toISOString() };
+}
+
+// Byg et nyt, stemplet pas. `patch` = felterne for et gennemført pas (eller null/done:false = gravsten).
+// Hele detaljesættet erstattes af `patch`; kun `at` (første gang gennemført) arves fra `prev`.
+export function stampEntry(patch, prev, { now, dev } = {}) {
+  const { nowMs, updatedAt } = stampTime(prev, now, 'stampEntry');
   if (patch == null || patch.done === false) {
     const t = { done: false, updatedAt };
     const d = cleanStr(dev, 16); if (d) t.dev = d;
@@ -102,6 +179,18 @@ export function stampEntry(patch, prev, { now, dev } = {}) {
   const at = (prev && prev.done === true && isoOrNull(prev.at)) || isoOrNull(patch.at) || new Date(nowMs).toISOString();
   const { done: _d, updatedAt: _u, dev: _v, at: _a, ...rest } = patch;
   return normalizeEntry({ ...rest, done: true, updatedAt, dev, at });
+}
+
+// Som stampEntry, men for en ekstra: `patch` = felterne (day, sport, min …) eller null / { deleted: true } = gravsten. Ugyldige felter giver null.
+export function stampExtra(patch, prev, { now, dev } = {}) {
+  const { updatedAt } = stampTime(prev, now, 'stampExtra');
+  if (patch == null || patch.deleted === true) {
+    const t = { deleted: true, updatedAt };
+    const d = cleanStr(dev, 16); if (d) t.dev = d;
+    return t;
+  }
+  const { updatedAt: _u, dev: _v, deleted: _d, ...rest } = patch;
+  return normalizeExtra({ ...rest, updatedAt, dev });
 }
 
 // ---- Merge (kommutativ, associativ, idempotent) ----
@@ -186,13 +275,12 @@ export function serializeWeek(weekId, week) {
   return head + '\n' + keys.map(k => `${JSON.stringify(k)}:${stableStringify(week[k])}`).join(',\n') + '\n}}';
 }
 
-// Valider hvert pas i en {sessionKey: raw}-map; ugyldige nøgler og pas droppes.
+// Valider hvert pas (og hver ekstra) i en {nøgle: raw}-map; ugyldige nøgler og poster droppes.
 function normalizeWeek(map) {
   const week = {};
   if (!isObj(map)) return week;
   for (const k of Object.keys(map)) {
-    if (!SESSION_KEY_RE.test(k)) continue;
-    const e = normalizeEntry(map[k]);
+    const e = SESSION_KEY_RE.test(k) ? normalizeEntry(map[k]) : EXTRA_KEY_RE.test(k) ? normalizeExtra(map[k]) : null;
     if (e) week[k] = e;
   }
   return week;

@@ -4,6 +4,7 @@ import {
   FORMAT, SCHEMA, EPOCH, META_FILE, GIST_DESCRIPTION,
   normalizeEntry, isDone, sessionSig, stampEntry, mergeEntry, mergeWeek, mergeProgress, diffWeeks,
   weekFileName, serializeWeek, parseWeekFile, parseAny, toExport, stableStringify,
+  EXTRA_SPORTS, EXTRA_SOURCES, isSessionKey, isExtraKey, isExtra, newExtraKey, normalizeExtra, stampExtra, liveExtras, sessionsOnly,
 } from '../src/progress.js';
 
 const T1 = '2026-11-24T06:58:01.123Z';
@@ -383,4 +384,136 @@ test('stableStringify: sorterede nøgler, ingen mellemrum, undefined udelades', 
   assert.equal(stableStringify('æøå'), '"æøå"');
   assert.equal(stableStringify(null), 'null');
   assert.equal(stableStringify({ a: 1, b: 2 }), stableStringify({ b: 2, a: 1 }));
+});
+
+
+// ---- Ekstra træning: nøgler x-<id> i de samme ugedokumenter ----
+const xtra = (updatedAt, extra = {}) => ({ day: 2, sport: 'run', min: 40, source: 'manual', updatedAt, ...extra });
+const xtomb = (updatedAt, dev) => ({ deleted: true, updatedAt, ...(dev ? { dev } : {}) });
+
+test('ekstra: nøgler og konstanter', () => {
+  assert.deepEqual([...EXTRA_SPORTS], ['swim', 'bike', 'run', 'str', 'other']);
+  assert.deepEqual([...EXTRA_SOURCES], ['manual', 'strava', 'intervals']);
+  for (const k of ['x-abc', 'x-mh3k9a12', 'x-s1a2b3c4d5e']) assert.ok(isExtraKey(k) && !isSessionKey(k), k);
+  for (const k of ['1-0', 'x-', 'x-ab', 'x-ABC', 'x-ab_c', 'X-abc', 'x-' + 'a'.repeat(25), 'u01', null, 5]) assert.ok(!isExtraKey(k), String(k));
+  assert.ok(isSessionKey('0-0') && isSessionKey('6-12') && !isSessionKey('7-0') && !isSessionKey('x-abc'));
+});
+
+test('ekstra: newExtraKey giver gyldige, korte og (nær) unikke nøgler', () => {
+  const k = newExtraKey(Date.parse('2026-11-24T10:00:00Z'), () => 0.5);
+  assert.match(k, /^x-[a-z0-9]{8,12}$/);
+  assert.ok(isExtraKey(k));
+  assert.notEqual(newExtraKey(1e12, () => 0.1), newExtraKey(1e12, () => 0.9), 'tilfældighed adskiller nøgler fra samme millisekund');
+  assert.notEqual(newExtraKey(1e12, () => 0.5), newExtraKey(1e12 + 1, () => 0.5), 'tiden adskiller dem også');
+  for (let i = 0; i < 200; i++) assert.ok(isExtraKey(newExtraKey()));
+  assert.ok(isExtraKey(newExtraKey(0, () => 0)), 'også tid 0');
+});
+
+test('ekstra: normalizeExtra bevarer en gyldig post og udfylder source = manual', () => {
+  const full = xtra(T1, { dev: 'k3f9a2c1', title: 'Fodbold', pace: 330.04, dist: 10200, hr: 148, rpe: 7, note: 'Tung', source: 'strava', activityId: '12345678901' });
+  assert.deepEqual(normalizeExtra(full), { ...full, pace: 330 });
+  assert.deepEqual(normalizeExtra({ day: 0, sport: 'swim', min: 1, updatedAt: T1 }), { day: 0, sport: 'swim', min: 1, source: 'manual', updatedAt: T1 });
+  assert.equal(normalizeExtra({ day: 6, sport: 'other', min: 900, updatedAt: 'ikke en dato' }).updatedAt, EPOCH);
+  assert.ok(isExtra(normalizeExtra(full)) && !isExtra(xtomb(T1)) && !isExtra(null) && !isExtra(done(T1)));
+});
+
+test('ekstra: validering af day, sport og min (ugyldig post = null) og af de valgfrie felter (felt droppes)', () => {
+  const n = raw => normalizeExtra({ ...xtra(T1), ...raw });
+  for (const bad of [-1, 7, 1.5, '2', null, undefined]) assert.equal(n({ day: bad }), null, `day ${bad}`);
+  for (const bad of ['yoga', 'race', 'rest', '', null, 1]) assert.equal(n({ sport: bad }), null, `sport ${bad}`);
+  for (const bad of [0, -5, 901, 4.5, '40', NaN, null]) assert.equal(n({ min: bad }), null, `min ${bad}`);
+  assert.equal(n({ min: 900 }).min, 900);
+  assert.equal(n({ source: 'intervals' }).source, 'intervals');
+  assert.equal(n({ source: 'garmin' }).source, 'manual', 'ukendt kilde → manual');
+  for (const bad of [0, 11, 5.5, '7']) assert.ok(!('rpe' in n({ rpe: bad })), `rpe ${bad}`);
+  assert.equal(n({ rpe: 10 }).rpe, 10);
+  for (const bad of [0.5, 3601, NaN, '330', null]) assert.ok(!('pace' in n({ pace: bad })), `pace ${bad}`);
+  for (const bad of [-1, 1000001, 1.5]) assert.ok(!('dist' in n({ dist: bad })), `dist ${bad}`);
+  for (const bad of [29, 251, 100.5]) assert.ok(!('hr' in n({ hr: bad })), `hr ${bad}`);
+  assert.equal(n({ title: 'x'.repeat(200) }).title.length, 80);
+  assert.ok(!('title' in n({ title: '' })) && !('note' in n({ note: 5 })));
+  assert.equal(n({ note: 'x'.repeat(1500) }).note.length, 1000);
+  assert.equal(n({ activityId: 'a'.repeat(65) }).activityId, undefined);
+  for (const bad of [null, true, 'x', 5, []]) assert.equal(normalizeExtra(bad), null);
+  assert.equal(normalizeExtra({ done: true, updatedAt: T1 }), null, 'et pas er ikke en ekstra');
+});
+
+test('ekstra: en gravsten mister alle detaljer (også dag, sport og min), og ukendte felter følger reglen for primitiver', () => {
+  assert.deepEqual(normalizeExtra({ ...xtra(T1, { note: 'x', rpe: 5, title: 't' }), deleted: true, dev: 'abc' }), { deleted: true, updatedAt: T1, dev: 'abc' });
+  assert.deepEqual(normalizeExtra({ deleted: true }), { deleted: true, updatedAt: EPOCH });
+  const e = normalizeExtra({ ...xtra(T1), kommer: 'senere', tal: 5, flag: true, stor: 'x'.repeat(201), obj: { a: 1 }, 'ugyldig nøgle': 1 });
+  assert.equal(e.kommer, 'senere'); assert.equal(e.tal, 5); assert.equal(e.flag, true);
+  assert.ok(!('stor' in e) && !('obj' in e) && !('ugyldig nøgle' in e));
+});
+
+test('ekstra: stampExtra stempler, slår altid sin forgænger (skæv ur) og laver gravsten', () => {
+  const now = '2026-11-24T10:00:00.000Z';
+  const a = stampExtra({ day: 2, sport: 'bike', min: 55, rpe: 6 }, null, { now, dev: 'deva0001' });
+  assert.deepEqual(a, { day: 2, sport: 'bike', min: 55, rpe: 6, source: 'manual', updatedAt: now, dev: 'deva0001' });
+  const b = stampExtra({ ...a, min: 60, updatedAt: 'ignoreres', dev: 'ignoreres' }, a, { now: '2026-11-24T09:00:00.000Z', dev: 'deva0001' });
+  assert.equal(b.min, 60);
+  assert.equal(b.updatedAt, '2026-11-24T10:00:00.001Z', 'et ur der går baglæns slår stadig forgængeren');
+  const t = stampExtra(null, b, { now, dev: 'deva0001' });
+  assert.deepEqual(t, { deleted: true, updatedAt: '2026-11-24T10:00:00.002Z', dev: 'deva0001' });
+  assert.deepEqual(stampExtra({ deleted: true, min: 5 }, null, { now }), { deleted: true, updatedAt: now });
+  assert.equal(stampExtra({ day: 9, sport: 'run', min: 5 }, null, { now }), null, 'ugyldige felter giver null');
+  assert.throws(() => stampExtra({ day: 1, sport: 'run', min: 5 }, null, { now: 'ikke en dato' }), TypeError);
+});
+
+test('ekstra: merge pr. nøgle er sidste skriver vinder, som for pas (også gravsten) – kommutativt og idempotent', () => {
+  const a = xtra(T1, { min: 30, dev: 'deva' }), b = xtra(T2, { min: 45, dev: 'devb' });
+  assert.deepEqual(mergeEntry(a, b), b); assert.deepEqual(mergeEntry(b, a), b);
+  assert.deepEqual(mergeEntry(xtomb(T1, 'x'), xtomb(T1, 'y')), xtomb(T1, 'y'), 'uafgjort: dev');
+  assert.deepEqual(mergeEntry(a, xtomb(T2)), xtomb(T2), 'en nyere gravsten slår posten');
+  assert.deepEqual(mergeEntry(xtomb(T1), b), b, 'en nyere redigering slår gravstenen');
+  assert.deepEqual(mergeEntry(null, xtomb(T1)), xtomb(T1));
+  const w1 = { '1-0': done(T1), 'x-aaa': a, 'x-bbb': xtomb(T1) }, w2 = { 'x-aaa': b, 'x-bbb': xtra(T2), 'x-ccc': a };
+  const m = mergeWeek(w1, w2);
+  assert.deepEqual(m, { '1-0': done(T1), 'x-aaa': b, 'x-bbb': xtra(T2), 'x-ccc': a });
+  assert.equal(stableStringify(mergeWeek(w2, w1)), stableStringify(m));
+  assert.equal(stableStringify(mergeWeek(m, m)), stableStringify(m));
+  assert.deepEqual(diffWeeks({ u05: w1 }, { u05: w2 }), ['u05']);
+  assert.deepEqual(diffWeeks({ u05: m }, { u05: m }), []);
+});
+
+test('ekstra: v2-ugefiler uden ekstra er stadig gyldige, og med ekstra går de tur-retur gennem serializeWeek og parseWeekFile', () => {
+  const plain = JSON.stringify({ format: FORMAT, v: 2, week: 'u05', sessions: { '1-0': done(T1, { min: 40 }) } });
+  assert.deepEqual(parseWeekFile('u05.json', plain), { weekId: 'u05', week: { '1-0': done(T1, { min: 40 }) } });
+  const week = { '1-0': done(T1, { min: 40 }), 'x-mh3k9a12': xtra(T2, { rpe: 8, title: 'Fodbold', sport: 'other' }), 'x-zzz': xtomb(T1, 'deva0001') };
+  const text = serializeWeek('u05', week);
+  assert.deepEqual(text.split('\n').slice(1, -1).map(l => l.slice(0, l.indexOf(':'))), ['"1-0"', '"x-mh3k9a12"', '"x-zzz"'], 'ét pas eller én ekstra pr. linje, sorterede nøgler');
+  assert.equal(serializeWeek('u05', parseWeekFile('u05.json', text).week), text, 'stabil tur-retur');
+  assert.deepEqual(parseWeekFile('u05.json', text).week, week);
+  assert.equal(JSON.parse(text).sessions['x-mh3k9a12'].sport, 'other');
+});
+
+test('ekstra: ugyldige ekstra og nøgler filtreres fra uden at røre pas', () => {
+  const raw = { format: FORMAT, v: 2, week: 'u05', sessions: {
+    '1-0': done(T1), 'x-ok1': xtra(T1), 'x-bad1': { day: 9, sport: 'run', min: 5, updatedAt: T1 }, 'x-bad2': 'nej', 'x-': xtra(T1), 'x-ABC': xtra(T1), 'y-abc': xtra(T1), '__proto__': xtra(T1),
+  } };
+  assert.deepEqual(Object.keys(parseWeekFile('u05.json', JSON.stringify(raw)).week).sort(), ['1-0', 'x-ok1']);
+});
+
+test('ekstra: parseAny og toExport bærer ekstra (v2-eksport, rå Progress, Artifact-dokumenter og v2 localStorage-blob)', () => {
+  const week = { '1-0': done(T1), 'x-aaa': xtra(T2, { note: 'n' }), 'x-bbb': xtomb(T2, 'devb') };
+  const exp = toExport({ u05: week }, new Date('2026-11-25T00:00:00Z'));
+  assert.deepEqual(exp.weeks.u05, week);
+  assert.deepEqual(parseAny(JSON.stringify(exp)), { u05: week });
+  assert.deepEqual(parseAny({ u05: week }), { u05: week });
+  assert.deepEqual(parseAny({ v: 2, weeks: { u05: week } }), { u05: week });
+  assert.deepEqual(parseAny([{ id: 'u05', data: { v: 2, sessions: week } }]), { u05: week });
+  assert.deepEqual(parseAny({ u05: { x: 1, 'x-aaa': xtra(T1) } }), { u05: { 'x-aaa': xtra(T1) } }, 'en uge med kun ekstra tæller også');
+});
+
+test('ekstra: liveExtras (sorteret, uden gravsten) og sessionsOnly', () => {
+  const p = {
+    u03: { '1-0': done(T1), 'x-bbb': xtra(T2, { day: 4 }), 'x-aaa': xtra(T1, { day: 4 }), 'x-ccc': xtomb(T2), 'x-ddd': xtra(T1, { day: 0 }) },
+    u01: { 'x-eee': xtra(T1, { day: 6 }) },
+    junk: { 'x-fff': xtra(T1) },
+  };
+  const live = liveExtras(p);
+  assert.deepEqual(live.map(x => [x.weekId, x.key, x.dayIdx]), [['u01', 'x-eee', 6], ['u03', 'x-ddd', 14], ['u03', 'x-aaa', 18], ['u03', 'x-bbb', 18]]);
+  assert.deepEqual(liveExtras(null), []);
+  assert.deepEqual(Object.keys(sessionsOnly(p.u03)), ['1-0']);
+  assert.deepEqual(sessionsOnly(null), {});
 });

@@ -2,14 +2,13 @@
 // ---- LocalStore: fremdrift i localStorage + enhedens id (docs/architecture.md §2) ----
 // Indeholder aldrig netværk. ArtifactDbStore og GistStore ombryder en LocalStore som cache.
 // Ingen bivirkninger ved indlæsning: alt sker først når en klasse instantieres (bundleren kører filen i en DOM-løs kontekst i tests).
-import { mergeProgress, parseAny, stableStringify, stampEntry } from '../progress.js';
+import { isExtraKey, isSessionKey, mergeProgress, parseAny, stableStringify, stampEntry, stampExtra } from '../progress.js';
 
 const KEY = 'im2027-progress-v2';     // {"v":2,"weeks":Progress}
 const V1_KEY = 'im2027-progress';      // gammelt format; læses én gang og røres aldrig
 const DEV_KEY = 'im2027-device';
 const LABEL = 'Gemmes kun på denne enhed';
 const WEEK_ID_RE = /^u\d{2}$/;
-const SESSION_KEY_RE = /^[0-6]-\d{1,2}$/;
 const DEV_RE = /^[a-z0-9]{1,16}$/;
 
 function defaultStorage() {
@@ -74,12 +73,15 @@ export class LocalStore {
   subscribe(cb) { this.#subs.add(cb); return () => { this.#subs.delete(cb); }; }
   onStatus() { return () => {}; } // LocalStore skifter aldrig status
 
-  // Synkron lokal anvendelse; kaster aldrig. patch = null → gravsten. Returnerer om passet blev gemt.
+  // Synkron lokal anvendelse; kaster aldrig. patch = null → gravsten. Returnerer om posten blev gemt.
+  // Nøglen er enten et planlagt pas ("1-0") eller en ekstra ("x-<id>", se progress.js: stampExtra).
   save(weekId, sessionKey, patch) {
     try {
-      if (typeof weekId !== 'string' || typeof sessionKey !== 'string' || !WEEK_ID_RE.test(weekId) || !SESSION_KEY_RE.test(sessionKey)) return false;
+      const extra = isExtraKey(sessionKey);
+      if (typeof weekId !== 'string' || !WEEK_ID_RE.test(weekId) || !(extra || isSessionKey(sessionKey))) return false;
       const week = this.#p[weekId] || {};
-      const e = stampEntry(patch, week[sessionKey], { now: this.#now(), dev: this.#dev });
+      const stamp = extra ? stampExtra : stampEntry;
+      const e = stamp(patch, week[sessionKey], { now: this.#now(), dev: this.#dev });
       if (!e) return false;
       this.#p = { ...this.#p, [weekId]: { ...week, [sessionKey]: e } };
       this.#persist();

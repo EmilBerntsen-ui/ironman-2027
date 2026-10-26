@@ -416,3 +416,40 @@ test('open: et langsomt svar fra runtimen giver stadig en store', async () => {
   assert.equal(st.kind, 'artifact');
   st.dispose();
 });
+
+
+test('ekstra (x-<id>) skrives i det samme ugedokument, læses tilbage på en anden enhed, og en gravsten når den også', async () => {
+  const db = fakeDb();
+  const clock = createClock(T0);
+  const a = await open(db, { storage: makeStorage({ 'im2027-device': 'deva0001' }), clock });
+  const b = await open(db, { storage: makeStorage({ 'im2027-device': 'devb0001' }), clock });
+  a.save('u05', '1-0', { done: true, min: 42 });
+  a.save('u05', 'x-mh3k9a12', { day: 3, sport: 'bike', min: 75, rpe: 7, note: 'Ekstra tur' });
+  await a.syncNow(); await settle();
+  const doc = db.data.get('u05');
+  assert.equal(doc.v, 2);
+  assert.deepEqual(Object.keys(doc.sessions).sort(), ['1-0', 'x-mh3k9a12']);
+  assert.deepEqual(doc.sessions['x-mh3k9a12'], { day: 3, sport: 'bike', min: 75, rpe: 7, note: 'Ekstra tur', source: 'manual', updatedAt: T0, dev: 'deva0001' });
+  assert.deepEqual(b.snapshot().u05['x-mh3k9a12'], doc.sessions['x-mh3k9a12'], 'den anden enhed får den via snapshot');
+  clock.set('2026-11-24T08:05:00.000Z');
+  b.save('u05', 'x-mh3k9a12', null);
+  await b.syncNow(); await settle();
+  assert.deepEqual(db.data.get('u05').sessions['x-mh3k9a12'], { deleted: true, updatedAt: '2026-11-24T08:05:00.000Z', dev: 'devb0001' });
+  assert.equal(a.snapshot().u05['x-mh3k9a12'].deleted, true);
+  assert.equal(a.snapshot().u05['1-0'].done, true, 'passet er urørt');
+  a.dispose(); b.dispose();
+});
+
+test('et dokument med ekstra læses (og et v2-dokument uden ekstra er stadig gyldigt); ugyldige ekstra droppes', async () => {
+  const db = fakeDb({ docs: {
+    u01: { v: 2, sessions: { '0-0': { done: true, updatedAt: '2026-10-27T06:00:00.000Z', dev: 'other001' } } },
+    u02: { v: 2, sessions: { 'x-ok1': { day: 1, sport: 'str', min: 30, source: 'manual', updatedAt: '2026-11-03T06:00:00.000Z', dev: 'other001' }, 'x-bad': { day: 9, sport: 'run', min: 30, updatedAt: '2026-11-03T06:00:00.000Z' } } },
+  } });
+  const st = await open(db);
+  const p = st.snapshot();
+  assert.equal(p.u01['0-0'].done, true);
+  assert.equal(p.u02['x-ok1'].sport, 'str');
+  assert.equal(p.u02['x-bad'], undefined);
+  assert.equal(db.sets.length, 0, 'intet at skrive');
+  st.dispose();
+});

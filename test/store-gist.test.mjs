@@ -974,3 +974,48 @@ test('et 200-svar uden files er et ødelagt svar: det skrives ikke som en tom gi
   assert.deepEqual(sync(storage).dirty, []);
   store.dispose();
 });
+
+
+test('ekstra (x-<id>): ligger i ugens fil, går fra A til B, og en sletning (gravsten) og en senere redigering vinder pr. nøgle', async () => {
+  const ctx = setup();
+  const A = device(ctx, 'deva0001'), B = device(ctx, 'devb0001');
+  A.store.save('u05', '1-0', { done: true, min: 42 });
+  A.store.save('u05', 'x-mh3k9a12', { day: 4, sport: 'swim', min: 35, rpe: 5, note: 'Åbent vand' });
+  await A.store.syncNow();
+  const file = parseWeekFile('u05.json', ctx.fake.file(GIST, 'u05.json'));
+  assert.deepEqual(Object.keys(file.week).sort(), ['1-0', 'x-mh3k9a12']);
+  assert.deepEqual(file.week['x-mh3k9a12'], { day: 4, sport: 'swim', min: 35, rpe: 5, note: 'Åbent vand', source: 'manual', updatedAt: '2026-11-24T10:00:00.000Z', dev: 'deva0001' });
+  assert.ok(ctx.fake.file(GIST, 'u05.json').includes('\n"x-mh3k9a12":{'), 'én ekstra pr. linje i den stabile JSON');
+  await B.store.syncNow();
+  assert.deepEqual(B.store.snapshot().u05, A.store.snapshot().u05);
+
+  ctx.clock.set('2026-11-24T10:05:00.000Z');
+  B.store.save('u05', 'x-mh3k9a12', null);
+  B.store.save('u05', 'x-zzz00', { day: 0, sport: 'other', title: 'Fodbold', min: 60 });
+  await B.store.syncNow();
+  await A.store.syncNow();
+  assert.deepEqual(A.store.snapshot().u05['x-mh3k9a12'], { deleted: true, updatedAt: '2026-11-24T10:05:00.000Z', dev: 'devb0001' });
+  assert.equal(A.store.snapshot().u05['x-zzz00'].title, 'Fodbold');
+  assert.equal(A.store.snapshot().u05['1-0'].done, true);
+
+  ctx.clock.set('2026-11-24T10:10:00.000Z');
+  A.store.save('u05', 'x-zzz00', { day: 0, sport: 'other', title: 'Fodbold', min: 75 });
+  await A.store.syncNow(); await B.store.syncNow();
+  assert.equal(B.store.snapshot().u05['x-zzz00'].min, 75);
+  assert.equal(patches(ctx.fake).every(r => Object.keys(r.body.files).every(n => n === 'u05.json')), true, 'kun ugens egen fil røres');
+  A.store.dispose(); B.store.dispose();
+});
+
+test('ekstra i en fjernfil valideres: ugyldige droppes, gyldige og pas bevares, og en ældre fil uden ekstra stadig læses', async () => {
+  const ctx = setup({ files: {
+    'u02.json': weekFile('u02', { '1-0': entry('2026-11-03T06:00:00.000Z', 'devx0001', { min: 33 }) }),
+    'u03.json': weekFile('u03', { 'x-ok1': { day: 2, sport: 'run', min: 40, source: 'strava', activityId: '123', updatedAt: '2026-11-10T08:00:00.000Z', dev: 'strava' }, 'x-bad': { day: 8, sport: 'run', min: 40, updatedAt: '2026-11-10T08:00:00.000Z' } }),
+  } });
+  const { store } = device(ctx, 'deva0001');
+  await store.syncNow();
+  assert.equal(store.snapshot().u02['1-0'].min, 33);
+  assert.deepEqual(Object.keys(store.snapshot().u03), ['x-ok1']);
+  assert.equal(store.snapshot().u03['x-ok1'].activityId, '123');
+  assert.equal(patches(ctx.fake).length, 0, 'intet at skrive: alt var allerede på serveren');
+  store.dispose();
+});

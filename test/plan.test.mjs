@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { plan, START, RACE, TUNEUP, addDays, isoDate, tss } from '../src/plan.js';
+import { plan, START, RACE, TUNEUP, addDays, extraIf, extraTss, isoDate, tss } from '../src/plan.js';
 import { buildIcs, fold } from '../src/ics.js';
 
 const weeks = plan();
@@ -178,4 +178,25 @@ test('.ics: "Energi undervejs" er én ekstra beskrivelseslinje, kun for pas over
   assert.match(ironman, /\nEnergi undervejs: cykel 60–90 g kulhydrat\/t/);
   const long = unesc(/^DESCRIPTION:(.*)$/m.exec(events.find(e => e.startsWith('UID:u06-5-0@')))[1]);
   assert.match(long, /\nEnergi undervejs: 30–60 g kulhydrat\/t\n/);
+});
+
+
+test('ekstra træning: intensitetsfaktor efter RPE (≤ 3: 0,65 · 4–6: 0,75 · 7–8: 0,85 · 9–10: 0,9 · uden RPE: 0,7)', () => {
+  const want = { 1: 0.65, 2: 0.65, 3: 0.65, 4: 0.75, 5: 0.75, 6: 0.75, 7: 0.85, 8: 0.85, 9: 0.9, 10: 0.9 };
+  for (const [rpe, f] of Object.entries(want)) assert.equal(extraIf(+rpe), f, `RPE ${rpe}`);
+  for (const bad of [undefined, null, 0, 11, 5.5, '7', NaN]) assert.equal(extraIf(bad), 0.7, `RPE ${bad}`);
+});
+
+test('ekstra træning: TSS = min × IF² × 100/60, og styrke har fast TSS som tss()', () => {
+  assert.equal(extraTss({ sport: 'run', min: 60, rpe: 5 }), Math.round(60 * 0.75 * 0.75 * 100 / 60));
+  assert.equal(extraTss({ sport: 'bike', min: 90, rpe: 8 }), Math.round(90 * 0.85 * 0.85 * 100 / 60));
+  assert.equal(extraTss({ sport: 'swim', min: 30, rpe: 2 }), Math.round(30 * 0.65 * 0.65 * 100 / 60));
+  assert.equal(extraTss({ sport: 'other', min: 60, rpe: 10 }), Math.round(60 * 0.9 * 0.9 * 100 / 60));
+  assert.equal(extraTss({ sport: 'run', min: 60 }), Math.round(60 * 0.7 * 0.7 * 100 / 60), 'uden RPE: 0,7');
+  assert.equal(extraTss({ sport: 'run', min: 60, rpe: 10 }), 81);
+  for (const [m, want] of [[15, 20], [20, 20], [21, 25], [39, 25], [40, 30], [90, 30]]) {
+    assert.equal(extraTss({ sport: 'str', min: m, rpe: 9 }), want, `styrke ${m} min`);
+    assert.equal(extraTss({ sport: 'str', min: m }), tss({ s: 'str', t: 'Styrke', m }), 'som tss()');
+  }
+  for (const bad of [null, undefined, {}, { sport: 'run', min: 0 }, { sport: 'run', min: -3 }]) assert.equal(extraTss(bad), 0);
 });

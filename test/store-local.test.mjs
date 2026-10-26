@@ -229,3 +229,49 @@ test('uden localStorage (Node) falder LocalStore tilbage til hukommelsen', () =>
   st.save('u01', '0-0', { done: true });
   assert.equal(st.snapshot().u01['0-0'].done, true);
 });
+
+
+test('save: en ekstra (x-<id>) stemples, gemmes og genindlæses som pas; en redigering og en sletning (gravsten) slår forgængeren', () => {
+  const clock = clockAt(T0);
+  const s = makeStorage({ 'im2027-device': 'deva0001' });
+  const st = store(s, clock);
+  const seen = [];
+  st.subscribe(p => seen.push(p));
+  assert.equal(st.save('u05', 'x-mh3k9a12', { day: 2, sport: 'run', min: 40, rpe: 6, note: 'Ekstra løb' }), true);
+  const e = st.snapshot().u05['x-mh3k9a12'];
+  assert.deepEqual(e, { day: 2, sport: 'run', min: 40, rpe: 6, note: 'Ekstra løb', source: 'manual', updatedAt: T0, dev: 'deva0001' });
+  assert.equal(seen.length, 1, 'abonnenter får besked');
+  assert.deepEqual(JSON.parse(s.getItem('im2027-progress-v2')).weeks.u05['x-mh3k9a12'], e);
+  assert.deepEqual(store(s).snapshot(), st.snapshot(), 'en ny instans læser den tilbage');
+  clock.tick(5000);
+  st.save('u05', 'x-mh3k9a12', { day: 2, sport: 'run', min: 45 });
+  assert.deepEqual(st.snapshot().u05['x-mh3k9a12'], { day: 2, sport: 'run', min: 45, source: 'manual', updatedAt: '2026-11-24T06:58:05.000Z', dev: 'deva0001' }, 'patch erstatter detaljerne');
+  clock.tick(5000);
+  st.save('u05', 'x-mh3k9a12', null);
+  assert.deepEqual(st.snapshot().u05['x-mh3k9a12'], { deleted: true, updatedAt: '2026-11-24T06:58:10.000Z', dev: 'deva0001' });
+  st.save('u05', '1-0', { done: true });
+  assert.deepEqual(Object.keys(st.snapshot().u05).sort(), ['1-0', 'x-mh3k9a12'], 'ekstra og pas lever side om side');
+});
+
+test('save: en ugyldig ekstra gemmes ikke og kaster ikke; ugyldige ekstra-nøgler afvises', () => {
+  const st = store(makeStorage());
+  for (const patch of [{ day: 9, sport: 'run', min: 40 }, { day: 1, sport: 'yoga', min: 40 }, { day: 1, sport: 'run', min: 0 }, {}]) {
+    assert.equal(st.save('u05', 'x-abc', patch), false);
+  }
+  for (const k of ['x-', 'x-ab', 'x-ABC', 'x-a b', 'y-abc']) assert.equal(st.save('u05', k, { day: 1, sport: 'run', min: 40 }), false, k);
+  assert.deepEqual(st.snapshot(), {});
+});
+
+test('ekstra tages ind fra andre faner og fra import (merge pr. nøgle, nyeste vinder)', async () => {
+  const s = makeStorage({ 'im2027-device': 'deva0001' });
+  const st = store(s);
+  st.save('u05', 'x-aaa', { day: 1, sport: 'bike', min: 30 });
+  const other = store(makeStorage({ 'im2027-device': 'devb0001' }), clockAt('2026-11-24T08:00:00.000Z'));
+  other.save('u05', 'x-aaa', { day: 1, sport: 'bike', min: 50 });
+  other.save('u05', 'x-bbb', { day: 3, sport: 'swim', min: 25 });
+  const r = await st.importProgress(JSON.parse(JSON.stringify(other.snapshot())));
+  assert.equal(r.changed, 2);
+  assert.equal(st.snapshot().u05['x-aaa'].min, 50);
+  assert.equal(st.snapshot().u05['x-bbb'].sport, 'swim');
+  assert.equal((await st.importProgress(other.snapshot())).changed, 0, 'idempotent');
+});

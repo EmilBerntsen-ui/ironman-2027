@@ -311,6 +311,20 @@ export function tss(s, minutes) {
   return Math.round(m * f * f * 100 / 60);
 }
 
+// Ekstra (uplanlagt) træning: TSS = min × IF² × 100/60 med IF efter RPE (≤ 3: 0,65 · 4–6: 0,75 · 7–8: 0,85 · 9–10: 0,9 · uden RPE: 0,7).
+// Styrke har fast TSS som i tss(). e = { sport, min, rpe? }.
+export function extraIf(rpe) {
+  if (!Number.isInteger(rpe) || rpe < 1 || rpe > 10) return 0.7;
+  return rpe <= 3 ? 0.65 : rpe <= 6 ? 0.75 : rpe <= 8 ? 0.85 : 0.9;
+}
+export function extraTss(e) {
+  const m = e && e.min;
+  if (!(m > 0)) return 0;
+  if (e.sport === 'str') return tss({ s: 'str', t: '' }, m);
+  const f = extraIf(e.rpe);
+  return Math.round(m * f * f * 100 / 60);
+}
+
 // ---- PMC: CTL (42 d), ATL (7 d), TSB = gårsdagens CTL − ATL ----
 // dailyTss: array af TSS pr. dag fra START. seed: antaget start-CTL/ATL.
 export function pmc(dailyTss, seed = 25) {
