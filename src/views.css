@@ -107,6 +107,8 @@ body { padding-left: var(--rail); }
   .stat-v { font-size: 44px; }
 }
 @media (max-width: 719.98px) {
+  .kt-v { font-size: 20px; }
+  .cp { min-width: 0; }
   /* Race-headeren fylder mindre på telefon, så dagens pas kommer tidligere i syne: nedtælling til højre for titlen, overskriften over begge */
   .bib { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "eyebrow eyebrow" "title count" "dist count" "progress progress"; padding: 16px 14px 12px; gap: 4px 12px; align-items: start; }
   .bib > div:first-child { display: contents; }
@@ -125,6 +127,39 @@ body { padding-left: var(--rail); }
   .tc-kost { font-size: 13px; }
   .tc-title { font-size: 26px; }
 }
+
+/* ---- Kost ---- */
+.kt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.kt-head .kc, .kt-week .kc { display: inline-block; font-size: 12px; }
+.kt-min { color: var(--muted); font-size: 14px; }
+.kt-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.kt { background: var(--sunk); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kt-l { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.kt-v { font-family: var(--display); font-weight: 800; font-size: 24px; line-height: 1.05; overflow-wrap: anywhere; }
+.kt-s { font-size: 12px; color: var(--muted); }
+.kt-note, .kt-none { margin: 0; font-size: 13px; color: var(--muted); }
+.kt-week { table-layout: auto; }
+.kt-week th { font-family: var(--body); font-size: 13px; font-weight: 600; text-align: left; color: var(--ink); padding: 5px 6px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.kt-week thead th { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--muted); border-bottom: 2px solid var(--ink); }
+.kt-week th small { display: block; font-weight: 400; color: var(--muted); font-size: 11.5px; }
+.kt-week td { white-space: nowrap; font-size: 13px; color: var(--ink); }
+.kt-week td:first-child { width: auto; font-weight: 400; }
+.kt-week tr.today th, .kt-week tr.today td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.kt-week .kc { margin-top: 2px; }
+
+/* ---- Analyse: overholdelse ---- */
+.comp th, .comp td { padding: 6px 8px 6px 0; vertical-align: middle; }
+.comp tbody th { font-family: var(--body); font-size: 14px; font-weight: 600; color: var(--ink); text-align: left; border-bottom: 1px solid var(--line); }
+.comp td { color: var(--ink); font-size: 13px; width: auto; font-weight: 400; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.comp td:first-child { width: auto; }
+.comp tr.total th, .comp tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 700; }
+.comp .sp { display: inline-flex; align-items: center; gap: 6px; }
+.comp .sp::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.cp { display: flex; align-items: center; gap: 8px; min-width: 96px; }
+.cbar { flex: 1 1 auto; min-width: 36px; height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; }
+.cbar i { display: block; height: 100%; }
+.cbar .t-ok { background: var(--ok); } .cbar .t-warn { background: var(--warn); } .cbar .t-miss { background: var(--miss); }
+.cp b { font-family: var(--mono); font-size: 12px; font-weight: 500; min-width: 3.2em; text-align: right; }
 
 /* ---- Kalender ---- */
 .agenda { scroll-margin-top: 72px; }

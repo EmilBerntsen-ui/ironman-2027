@@ -90,7 +90,46 @@ function paintKost() {
     (weight === null ? `<p class="kost-p kost-weight">Tabellen viser g/kg. ${weightBtn} for at få en kolonne med gram.</p>` : '') + kostGuide(weight).map(sec).join('');
   // Linjen over kalenderen: uden vægt vises g/kg, og "Angiv vægt" står lige ved chipsene.
   $('kostCap').innerHTML = `Under hver dag: dagtype · energi (estimat) · kulhydrat. ${weight === null ? `Uden vægt vises g/kg. ${weightBtn} for at få gram og kcal. ` : ''}Se guiden Kost.`;
+  paintKostTab();
 }
+// Kost-fanen: dagens og ugens mål (energi, kulhydrat, protein). Med vægt i gram og kcal, uden i g/kg og med "Angiv vægt". Estimater, se nutrition.js.
+const num = n => n.toLocaleString('da-DK');
+const rng = (a, b) => a === b ? num(a) : `${num(a)}–${num(b)}`;
+function kostTargets(n) {
+  return {
+    kcal: n.kcal ? `${rng(n.kcal.lo, n.kcal.hi)} kcal` : null,
+    carb: n.carb ? (n.carb.grams ? `${rng(...n.carb.grams)} g` : `${rng(...n.carb.perKg)} g/kg`) : null,
+    protein: n.protein.grams ? `ca. ${num(n.protein.grams.day)} g` : `${num(n.protein.perKg)} g/kg`,
+  };
+}
+function kostTodayHtml() {
+  if (!inPlan()) return `<h3>Dagens kost</h3><p class="kt-none">${todayIdx < 0 ? `Planen starter ${fmt(START)}. Ugens mål står herunder.` : 'Planen er slut.'}</p>`;
+  const wi = Math.floor(todayIdx / 7), di = todayIdx % 7, n = dayKost(wi, di), t = kostTargets(n), w = weeks[wi];
+  const tile = (label, value, sub) => `<div class="kt"><div class="kt-l">${label}</div><div class="kt-v num">${value || '–'}</div><div class="kt-s">${sub}</div></div>`;
+  const kcalSub = weight === null ? `${weightBtn} for kcal` : n.kcal ? 'estimat, ±5 %' : n.type === 'race' ? 'se løbsdagsplanen' : 'ikke et kcal-mål';
+  return `<h3>I dag · ${DAYS_LONG[di]} ${fmt(addDays(w.start, di))}</h3><div class="kt-head"><span class="kc k-${n.type}">${esc(n.label)}</span><span class="kt-min">${n.minutes ? `Træning ${dur(n.minutes)}` : 'Ingen træning'}</span></div>` +
+    `<div class="kt-tiles">${tile('Energi', t.kcal, kcalSub)}${tile('Kulhydrat', t.carb, n.carb && n.carb.grams ? `${rng(...n.carb.perKg)} g/kg` : 'pr. kg kropsvægt')}` +
+    `${tile('Protein', t.protein, n.protein.grams ? `ramme ${rng(...n.protein.grams.range)} g` : `ramme ${num(n.protein.range[0])}–${num(n.protein.range[1])} g/kg`)}</div>` +
+    (n.note ? `<p class="kt-note">${esc(n.note)}</p>` : '') + `<p class="kt-note">${esc(n.proteinText)}</p>`;
+}
+function kostWeekHtml() {
+  const w = weeks[nowIdx], avg = weekKcalAverage(w.days, w.start, weight);
+  const head = `<tr><th scope="col">Dag</th>${weight === null ? '' : '<th scope="col">Energi</th>'}<th scope="col">Kulhydrat</th><th scope="col">Protein</th></tr>`;
+  const rows = w.days.map((d, di) => {
+    const n = dayKost(nowIdx, di), t = kostTargets(n), isToday = dayIdxOf(nowIdx, di) === todayIdx;
+    return `<tr${isToday ? ' class="today" aria-current="date"' : ''}><th scope="row">${DAYS[di]} <small>${fmt(addDays(w.start, di))}</small><span class="kc k-${n.type}">${esc(n.label)}</span></th>` +
+      `${weight === null ? '' : `<td class="num">${n.kcal ? esc(t.kcal.replace(' kcal', '')) : '–'}</td>`}<td class="num">${t.carb ? esc(t.carb) : '–'}</td><td class="num">${esc(t.protein)}</td></tr>`;
+  }).join('');
+  return `<h3>${todayIdx < 0 ? 'Første uge' : 'Denne uge'} · uge ${w.n}</h3>` +
+    (weight === null ? `<p class="kt-note">Uden vægt vises g/kg. ${weightBtn} for kcal og gram.</p>` : '') +
+    `<table class="zones kt-week"><thead>${head}</thead><tbody>${rows}</tbody></table>` +
+    `<p class="kt-note">${avg ? `Gennemsnit pr. dag: ${esc(avg.text)} (estimat). ` : ''}Energi er et estimat, og opladnings- og løbsdage har intet kcal-mål. Se guiden herunder.</p>`;
+}
+function paintKostTab() {
+  $('kostToday').innerHTML = kostTodayHtml();
+  $('kostWeek').innerHTML = kostWeekHtml();
+}
+
 // Vægten er ændret (indstillingerne, eller en anden fane): tegn chips, ugesummer og guide igen uden at miste rullepositionen.
 function repaintKost() {
   const grid = $('grid'), scroll = grid.scrollTop;
@@ -206,6 +245,7 @@ function refresh() {
   $('ptext').textContent = `${done} af ${total} pas gennemført`;
   $('pbar').style.width = (done / total * 100) + '%';
   paintToday();
+  paintCompliance();
   drawPerf();
 }
 
@@ -460,6 +500,21 @@ function nextKeyHtml() {
     `<span class="nk-m num">${DAYS[k.di]} ${fmt(addDays(w.start, k.di))} · ${daysFromNow(k.dayIdx - todayIdx)} · ${dur(s.m)}</span>${pz ? `<span class="nk-p">${esc(pz)}</span>` : ''}</button>`;
 }
 
+// ---- Analyse: overholdelse pr. sport ----
+// Planlagt til og med i går (plus det du allerede har gennemført i dag) mod gennemført: pas og minutter. Se complianceBySport i views.js.
+function paintCompliance() {
+  const c = complianceBySport(weeks, todayIdx, (wi, di, si) => entry(weeks[wi].id, `${di}-${si}`));
+  if (!c.rows.length) { $('compliance').innerHTML = `<p class="kt-none">Der er ingen planlagte pas endnu. Overholdelsen vises fra planens start.</p>`; return; }
+  const tone = p => p === null ? 'miss' : p >= 90 ? 'ok' : p >= 60 ? 'warn' : 'miss';
+  const row = r => {
+    const p = pct(r.minDone, r.min), all = r.sport === 'all';
+    return `<tr${all ? ' class="total"' : ''}><th scope="row">${all ? 'Alle' : `<span class="sp c-${r.sport}">${SPORT[r.sport]}</span>`}</th><td class="num">${r.nDone}/${r.n}</td><td class="num">${dur(r.minDone)} / ${dur(r.min)}</td>` +
+      `<td class="cp"><span class="cbar" aria-hidden="true"><i class="t-${tone(p)}" style="width:${Math.min(100, p || 0)}%"></i></span><b class="num">${p === null ? '–' : p + ' %'}</b></td></tr>`;
+  };
+  $('compliance').innerHTML = `<table class="zones comp"><thead><tr><th scope="col">Sport</th><th scope="col">Pas</th><th scope="col">Minutter</th><th scope="col">Overholdt</th></tr></thead><tbody>${c.rows.concat(c.total).map(row).join('')}</tbody></table>` +
+    `<p class="kt-note">Planlagt til og med i går, plus det du har gennemført i dag. Minutter er det, du har skrevet, ellers det planlagte. Overholdt er gennemførte minutter af de planlagte.</p>`;
+}
+
 function paintToday() {
   $('todayHead').innerHTML = todayHeadHtml();
   $('todaySessions').innerHTML = todaySessionsHtml();
@@ -571,6 +626,7 @@ function rollDay() {
   paintHeader();
   buildGrid();
   selectWeek(follow ? nowIdx : selIdx);
+  paintKostTab(); // dagens og ugens kost
   refresh();
   if (follow) scrollGridTo(nowIdx, false); else grid.scrollTop = scroll;
 }
