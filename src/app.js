@@ -1,7 +1,7 @@
 // ---- App: fem faner (I dag, Kalender, Kost, Analyse, Mere), detaljevisning, PMC-graf og gemning ----
 // Forudsætter at disse er inlinet før denne fil: plan.js (plan, PH, START, RACE, TUNEUP, addDays, isoDate, tss, extraTss, pmc, plannedDailyTss),
 // progress.js (isDone, isExtra, liveExtras, newExtraKey, sessionSig), pace.js (anbefalet og faktisk fart), nutrition.js (kost), views.js (routing, nøglepas, overholdelse, stat-kort),
-// store/local.js (LocalStore), settings.js (mountSettings) og BUILD fra bundleren.
+// advice.js (adviceFor), store/local.js (LocalStore), settings.js (mountSettings) og BUILD fra bundleren.
 // ArtifactDbStore (kun artifact-målet) og GistStore (kun site-målet) findes kun i deres eget mål: brug typeof-vagt.
 const DAYS = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
 const DAYS_LONG = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
@@ -667,8 +667,8 @@ function todaySessionsHtml() {
 }
 
 // Fitness (CTL), Form (TSB) og Træthed (ATL) med den faktiske PMC; før der er logget noget bruges den planlagte.
-function statCardsHtml() {
-  const daily = actualDaily(), logged = daily.slice(0, actualUpto()).some(v => v > 0);
+function statCardsHtml(daily) {
+  const logged = daily.slice(0, actualUpto()).some(v => v > 0);
   const v = pmcView(plannedPmc, actualPmc(daily), logged, todayIdx);
   const src = v.source === 'actual' ? 'Faktisk' : 'Plan';
   const card = (key, label, abbr, color) => {
@@ -713,11 +713,56 @@ function paintCompliance() {
     `<p class="kt-note">Planlagt til og med i går, plus det du har gennemført i dag. Minutter er det, du har skrevet, ellers det planlagte. Overholdt er gennemførte minutter af de planlagte. Ekstra træning (uplanlagt) står som + ekstra og indgår ikke i procenten.</p>`;
 }
 
+// ---- Plan-råd (src/advice.js): tommelfingerregler på I dag ----
+// Planen ændrer sig aldrig; kortene foreslår kun, hvad man kan gøre i dag, og viser tallene bag. Et kort kan skjules for i dag:
+// regel-id'erne gemmes i localStorage under én nøgle pr. dato (en blokeret lagring giver en midlertidig huskeliste i hukommelsen).
+const ADVICE_KEY = 'im2027-advice-dismissed-';
+const ADVICE_LEVEL_TEXT = { info: 'Info', warn: 'Advarsel', stop: 'Stop' };
+const adviceMem = new Map(); // dato → [regel-id], hvis localStorage ikke kan bruges
+function dismissedToday() {
+  const date = isoDate(today), out = new Set(adviceMem.get(date) || []);
+  try {
+    const raw = localStorage.getItem(ADVICE_KEY + date);
+    for (const r of raw ? JSON.parse(raw) : []) if (typeof r === 'string') out.add(r);
+  } catch (e) { /* blokeret eller ødelagt: kun hukommelsen */ }
+  return [...out];
+}
+function dismissAdvice(rule) {
+  const date = isoDate(today), list = [...new Set([...dismissedToday(), rule])];
+  adviceMem.set(date, list);
+  try {
+    localStorage.setItem(ADVICE_KEY + date, JSON.stringify(list));
+    for (let i = localStorage.length - 1; i >= 0; i--) { // ryd gamle dages nøgler op
+      const k = localStorage.key(i);
+      if (k && k.startsWith(ADVICE_KEY) && k !== ADVICE_KEY + date) localStorage.removeItem(k);
+    }
+  } catch (e) { /* ligegyldigt: kortet er skjult i hukommelsen */ }
+}
+function adviceHtml(a) {
+  return `<article class="adv adv-${a.level}" data-advice="${esc(a.rule)}"><div class="adv-top"><span class="adv-tag"><b>${ADVICE_LEVEL_TEXT[a.level]}</b> · Tommelfingerregel</span>` +
+    `<button type="button" class="adv-x" data-adv-dismiss="${esc(a.rule)}" aria-label="Skjul rådet for i dag">Skjul i dag</button></div>` +
+    `<h3 class="adv-title">${esc(a.title)}</h3><p class="adv-text">${esc(a.text)}</p><p class="adv-why">${esc(a.reason)}</p></article>`;
+}
+function paintAdvice(act) {
+  const list = inPlan() ? adviceFor({ weeks, progress: state, todayIdx, actualPmc: act, plannedPmc, dismissed: dismissedToday() }) : [];
+  $('advice').innerHTML = list.length
+    ? `<h2 class="adv-head">Råd til i dag</h2>${list.map(adviceHtml).join('')}<p class="adv-note">Tommelfingerregler ud fra dine logs, ikke individuel rådgivning. Planen ændrer sig ikke.</p>`
+    : '';
+}
+$('advice').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-adv-dismiss]');
+  if (!b) return;
+  dismissAdvice(b.dataset.advDismiss);
+  paintAdvice(actualPmc());
+});
+
 function paintToday() {
+  const daily = actualDaily();
   $('todayHead').innerHTML = todayHeadHtml();
   $('todaySessions').innerHTML = todaySessionsHtml();
   paintAdd();
-  $('statCards').innerHTML = statCardsHtml();
+  $('statCards').innerHTML = statCardsHtml(daily);
+  paintAdvice(actualPmc(daily));
   $('weekProgress').innerHTML = weekProgressHtml();
   $('nextKey').innerHTML = nextKeyHtml();
 }

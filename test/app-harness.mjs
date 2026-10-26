@@ -4,8 +4,8 @@ import vm from 'node:vm';
 import { bundleJs } from '../build/bundle.mjs';
 import { fakeDocument, fakeWindow, memoryStorage } from './dom-harness.mjs';
 
-export const SITE_FILES = ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/store/local.js', 'src/settings.js', 'src/app.js'];
-export const ARTIFACT_FILES = ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'];
+export const SITE_FILES = ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/advice.js', 'src/store/local.js', 'src/settings.js', 'src/app.js'];
+export const ARTIFACT_FILES = ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/advice.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'];
 
 // Falsk location: hash som i browseren ('' eller '#token'), og en ny hash melder hashchange på window (som browseren gør, bare synkront).
 function fakeLocation(win, hash, onReload) {

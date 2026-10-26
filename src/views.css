@@ -151,6 +151,23 @@ body { padding-left: var(--rail); }
   .tc-title { font-size: 26px; }
 }
 
+/* ---- Plan-råd (tommelfingerregler) på I dag ---- */
+#advice { display: flex; flex-direction: column; gap: 10px; }
+.adv-head { margin: 0; font-size: 22px; }
+.adv { --ac: var(--ctl); background: var(--surface); border: 1px solid var(--line); border-left: 6px solid var(--ac); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.adv-info { --ac: var(--ctl); }
+.adv-warn { --ac: var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+.adv-stop { --ac: var(--miss); background: color-mix(in srgb, var(--miss) 10%, var(--surface)); }
+.adv-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.adv-tag { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.adv-tag b { color: var(--ink); font-weight: 600; }
+.adv-x { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 13px; text-decoration: underline; text-underline-offset: 2px; min-height: 44px; padding: 0 4px; margin: -8px -4px -8px 0; }
+.adv-x:hover { color: var(--ink); }
+.adv-title { margin: 0; font-size: 22px; line-height: 1.1; }
+.adv-text, .adv-why, .adv-note { margin: 0; font-size: 14px; }
+.adv-why { color: var(--muted); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.adv-note { color: var(--muted); font-size: 12px; }
+
 /* ---- Kost ---- */
 .kt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .kt-head .kc, .kt-week .kc { display: inline-block; font-size: 12px; }

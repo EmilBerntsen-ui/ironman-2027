@@ -179,8 +179,8 @@ test('I dag tegnes om ved ny vægt, ved dagsskifte og når en anden Store giver 
 
 test('"+ Tilføj træning" består af én knap efter hver tegning, og #advice er tom uden logs', () => {
   const app = loadApp({ now: SAT });
+  assert.equal(app.$('advice').innerHTML, '', 'uden logs ved vi ikke, hvad der er sprunget over');
   check(app, 'u02-5-0');
-  assert.equal(app.$('advice').innerHTML, '');
   assert.match(app.$('addWorkout').innerHTML, /^<button type="button" class="btn add-btn" data-add>\+ Tilføj træning<\/button>$/);
 });
 

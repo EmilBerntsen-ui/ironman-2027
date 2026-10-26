@@ -96,8 +96,8 @@ test('hvert måls JS-bundle er gyldig syntaks, kolliderer ikke på eksportnavne 
   }
 });
 
-test('bundlerens eksportnavne = Nodes eksportnavne for plan.js, progress.js, pace.js, nutrition.js og views.js', async () => {
-  for (const f of ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js']) {
+test('bundlerens eksportnavne = Nodes eksportnavne for plan.js, progress.js, pace.js, nutrition.js, views.js og advice.js', async () => {
+  for (const f of ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/advice.js']) {
     const viaBundler = exportNames(readFileSync(resolve(ROOT, f), 'utf8'), f).sort();
     const viaNode = Object.keys(await import('../' + f)).sort();
     assert.deepEqual(viaBundler, viaNode, f);
