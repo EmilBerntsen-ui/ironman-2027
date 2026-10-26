@@ -211,6 +211,28 @@ dialog.sheet::backdrop { background: rgba(10, 16, 15, .55); }
 .sh .x { background: none; border: 0; font-size: 26px; line-height: 1; cursor: pointer; color: var(--muted); width: 40px; height: 40px; flex: none; }
 .sh .msg { font-size: 13px; color: var(--muted); min-height: 1em; }
 
+/* Kost: chip pr. dag, ugesum, blok i arket og guide */
+.kc { --kc: var(--rest); display: block; font-family: var(--mono); font-size: 10.5px; line-height: 1.3; color: var(--ink); background: color-mix(in srgb, var(--kc) 16%, transparent);
+  border-left: 3px solid var(--kc); border-radius: 3px; padding: 2px 5px; overflow-wrap: anywhere; }
+.kc.k-hvile { --kc: var(--rest); } .kc.k-let { --kc: var(--rec); } .kc.k-moderat { --kc: var(--exam); } .kc.k-lang { --kc: var(--bike); }
+.kc.k-opladning { --kc: var(--swim); } .kc.k-race { --kc: var(--race); }
+.kost-cap { margin: -4px 0 10px; }
+.gsum .row.kost { flex-direction: column; gap: 0; }
+.ag-day .lbl { flex-wrap: wrap; }
+.ag-day .lbl .kc { display: inline-block; font-size: 12px; font-weight: 400; }
+.sh-kost { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 12px; }
+.sh-kost h4 { margin: 0; font-family: var(--display); font-size: 18px; text-transform: uppercase; letter-spacing: .01em; }
+.sh-kost dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 0; font-size: 14px; }
+.sh-kost dt { color: var(--muted); font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding-top: 3px; }
+.sh-kost dd { margin: 0; overflow-wrap: anywhere; }
+.sh-kost dd small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.sh-kost .hint { margin: 0; color: var(--muted); font-size: 12px; }
+.guide .kost-note { grid-column: 1 / -1; color: var(--ink); font-weight: 600; }
+.guide .kost-p { margin-top: 8px; }
+.guide a { color: var(--ink); text-underline-offset: 2px; }
+.kost-table td:first-child { width: auto; }
+.kost-table td:nth-child(n+3) { white-space: nowrap; }
+
 @media (max-width: 719.98px) {
   .bib { grid-template-columns: minmax(0, 1fr); padding: 20px 16px 16px; }
   .count { text-align: left; }

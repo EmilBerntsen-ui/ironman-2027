@@ -1,6 +1,6 @@
 // ---- App: kalender, detaljevisning, PMC-graf og gemning ----
 // Forudsætter at disse er inlinet før denne fil: plan.js (plan, PH, START, RACE, TUNEUP, addDays, tss, pmc, plannedDailyTss),
-// progress.js (isDone, sessionSig), pace.js (anbefalet og faktisk fart), store/local.js (LocalStore), settings.js (mountSettings) og BUILD fra bundleren.
+// progress.js (isDone, sessionSig), pace.js (anbefalet og faktisk fart), nutrition.js (kost), store/local.js (LocalStore), settings.js (mountSettings) og BUILD fra bundleren.
 // ArtifactDbStore (kun artifact-målet) og GistStore (kun site-målet) findes kun i deres eget mål: brug typeof-vagt.
 const DAYS = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
 const DAYS_LONG = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
@@ -54,6 +54,46 @@ function weekStats(w) {
   return { plan, done, n, nDone, tssP, planMin: sum(plan), doneMin: sum(done) };
 }
 
+// ---- Kost (src/nutrition.js) ----
+// Vægten er personlig: den læses kun fra localStorage på denne enhed og indgår aldrig i Store'en, eksporten eller kalenderen.
+let weight = null; // kg eller null (uden vægt vises g/kg i stedet for gram og kcal)
+function loadWeight() {
+  let ls = null;
+  try { ls = localStorage; } catch (e) { /* blokeret: så er vægten ukendt */ }
+  return readWeight(ls);
+}
+weight = loadWeight();
+const nextDayOf = (wi, di) => di < 6 ? weeks[wi].days[di + 1] : (weeks[wi + 1] ? weeks[wi + 1].days[0] : []);
+const dayKost = (wi, di) => { const w = weeks[wi], d = w.days[di]; return dayNutrition(dayType(d, addDays(w.start, di)), dayMinutes(d), weight); };
+const kostChip = (wi, di) => { const n = dayKost(wi, di); return `<span class="kc k-${n.type}">${esc(n.chip)}</span>`; };
+// "Kost"-blokken i arket: dagen (dagtype, energi, kulhydrat, protein) og før/under/efter for passet.
+function kostSheetHtml(k) {
+  const { w, wi, di, si, s } = k, n = dayKost(wi, di);
+  const f = s.s === 'rest' ? null : sessionFueling(w.days[di], si, { next: nextDayOf(wi, di), weight });
+  const row = (dt, dd, subs = []) => `<dt>${dt}</dt><dd>${esc(dd)}${subs.filter(Boolean).map(x => `<small>${esc(x)}</small>`).join('')}</dd>`;
+  return `<section class="sh-kost"><h4>Kost</h4><dl>${row('Dagen', n.text, [n.proteinText, n.note])}` +
+    (f ? row('Før', f.before) + row('Under', f.during) + row('Efter', f.after) : '') + `</dl>` +
+    `<p class="hint">${weight === null ? 'Angiv din vægt i indstillingerne (knappen øverst) for at få gram og kcal. ' : ''}Estimat og generel vejledning. Se guiden Kost.</p></section>`;
+}
+// Guiden "Kost": data fra kostGuide() (nutrition.js), tegnet her. Linket til rapporten bor her og ikke i app.html (siden må kun nævne api.github.com).
+function paintKost() {
+  const cell = tag => c => `<${tag}>${esc(c)}</${tag}>`;
+  const sec = s => `<section><h3>${esc(s.title)}</h3>` +
+    (s.table ? `<table class="zones kost-table"><tr>${s.table.head.map(cell('th')).join('')}</tr>${s.table.rows.map(r => `<tr>${r.map(cell('td')).join('')}</tr>`).join('')}</table>` : '') +
+    (s.items ? `<ul>${s.items.map(i => `<li>${i.b ? `<b>${esc(i.b)}:</b> ` : ''}${esc(i.t)}</li>`).join('')}</ul>` : '') +
+    (s.notes || []).map(t => `<p class="kost-p">${esc(t)}</p>`).join('') +
+    (s.link ? `<p class="kost-p"><a href="${esc(s.link.href)}" target="_blank" rel="noopener noreferrer">${esc(s.link.text)}</a></p>` : '') + `</section>`;
+  $('kostGuide').innerHTML = `<p class="kost-note">${esc(KOST_DISCLAIMER)}</p>` + kostGuide(weight).map(sec).join('');
+}
+// Vægten er ændret (indstillingerne, eller en anden fane): tegn chips, ugesummer og guide igen uden at miste rullepositionen.
+function repaintKost() {
+  const grid = $('grid'), scroll = grid.scrollTop;
+  buildGrid();
+  grid.scrollTop = scroll;
+  refresh();
+  paintKost();
+}
+
 // ---- Header ----
 function paintHeader() {
   $('days').textContent = Math.max(0, Math.round((RACE - today) / DAY_MS));
@@ -88,10 +128,11 @@ const pills = (w, wi) => `<span class="pill k-${w.k}">${KIND[w.k]}</span><span c
 
 // ---- Desktop: ugegitter ----
 function sumHtml(w) {
-  const st = weekStats(w);
+  const st = weekStats(w), kost = weekKcalAverage(w.days, w.start, weight);
   return `<div class="hh num">${hrs(st.doneMin)}<small> / ${hrs(st.planMin)} t</small></div>` +
     `<div class="row"><span>Pas</span><b>${st.nDone}/${st.n}</b></div>` +
     `<div class="row"><span>Planlagt TSS</span><b>${st.tssP}</b></div>` +
+    (kost ? `<div class="row kost"><span>Kost ⌀/dag, estimat</span><b>${esc(kost.text)}</b></div>` : '') +
     SPORTS.filter(s => st.plan[s]).map(s => `<div class="row c-${s}"><span class="sp">${SPORT[s]}</span><b>${st.done[s] ? dur(st.done[s]) + ' / ' : ''}${dur(st.plan[s])}</b></div>`).join('');
 }
 function buildGrid() {
@@ -104,7 +145,7 @@ function buildGrid() {
       w.days.map((d, di) => {
         const date = addDays(w.start, di);
         const isToday = dayIdxOf(wi, di) === todayIdx;
-        return `<div class="gd${isToday ? ' today' : ''}"><span class="dt">${isToday ? 'I dag · ' : ''}${fmt(date)}</span>${d.map((s, si) => cardHtml(w, wi, di, si, s)).join('')}</div>`;
+        return `<div class="gd${isToday ? ' today' : ''}"><span class="dt">${isToday ? 'I dag · ' : ''}${fmt(date)}</span>${kostChip(wi, di)}${d.map((s, si) => cardHtml(w, wi, di, si, s)).join('')}</div>`;
       }).join('') +
       `<div class="gsum" data-sum="${w.id}">${sumHtml(w)}</div></div></div>`;
   });
@@ -118,17 +159,17 @@ function scrollGridTo(wi, smooth) {
 
 // ---- Telefon: dagsliste for valgt uge ----
 function buildAgenda() {
-  const wi = selIdx, w = weeks[wi], st = weekStats(w), end = addDays(w.start, 6);
+  const wi = selIdx, w = weeks[wi], st = weekStats(w), end = addDays(w.start, 6), kostAvg = weekKcalAverage(w.days, w.start, weight);
   const mix = SPORTS.filter(s => st.plan[s]).map(s => `<i style="flex:${st.plan[s]};background:var(--${s})"></i>`).join('');
   let h = `<div class="ag-head${wi === nowIdx ? ' now' : ''}">` +
     `<div class="ag-top"><span class="wn">Uge ${w.n}</span><span>${fmt(w.start)} – ${fmt(end)}</span></div>` +
     `<div class="ag-top">${pills(w, wi)}</div>` +
-    `<div class="ag-stats"><span>Timer <b>${hrs(st.doneMin)} / ${hrs(st.planMin)}</b></span><span>Pas <b>${st.nDone}/${st.n}</b></span><span>TSS <b>${st.tssP}</b></span></div>` +
+    `<div class="ag-stats"><span>Timer <b>${hrs(st.doneMin)} / ${hrs(st.planMin)}</b></span><span>Pas <b>${st.nDone}/${st.n}</b></span><span>TSS <b>${st.tssP}</b></span>${kostAvg ? `<span>Kost ⌀/dag, estimat <b>${esc(kostAvg.text)}</b></span>` : ''}</div>` +
     `<div class="mix" aria-hidden="true">${mix}</div>` +
     (w.note ? `<div class="ag-note">${esc(w.note)}</div>` : '') + `</div>`;
   w.days.forEach((d, di) => {
     const date = addDays(w.start, di), isToday = dayIdxOf(wi, di) === todayIdx;
-    h += `<div class="ag-day${isToday ? ' today' : ''}"><div class="lbl">${DAYS_LONG[di]}<small>${fmt(date)}${isToday ? ' · i dag' : ''}</small></div>${d.map((s, si) => cardHtml(w, wi, di, si, s)).join('')}</div>`;
+    h += `<div class="ag-day${isToday ? ' today' : ''}"><div class="lbl">${DAYS_LONG[di]}<small>${fmt(date)}${isToday ? ' · i dag' : ''}</small>${kostChip(wi, di)}</div>${d.map((s, si) => cardHtml(w, wi, di, si, s)).join('')}</div>`;
   });
   $('agenda').innerHTML = h;
 }
@@ -234,7 +275,7 @@ function openSheet(key) {
   const sh = $('sh');
   sh.className = `sh c-${s.s}`;
   sh.innerHTML = `<div class="sh-top"><div><div class="sh-sport">${SPORT[s.s]}</div><h3 id="shTitle">${esc(s.t)}</h3><div class="when">${DAYS_LONG[di]} ${fmt(date)} ${date.getFullYear()} · Uge ${w.n} · ${PH[w.ph].name}</div></div><button class="x" id="fClose" aria-label="Luk">×</button></div>
-    <p class="desc">${esc(s.d)}</p>${facts}${ps ? `<p class="desc sh-pace">${esc(ps.sheet)}</p>` : ''}${e && e.src === 'strava' ? stravaHtml(e) : ''}${form}`;
+    <p class="desc">${esc(s.d)}</p>${facts}${ps ? `<p class="desc sh-pace">${esc(ps.sheet)}</p>` : ''}${e && e.src === 'strava' ? stravaHtml(e) : ''}${kostSheetHtml(k)}${form}`;
   if (!sheet.open) sheet.showModal();
 }
 sheet.addEventListener('click', ev => {
@@ -413,6 +454,7 @@ function paintZones() {
   $('zonesNote').textContent = `Z1–Z2 er snakketempo: løb under 89 % af tærskelpuls. Z4 er hårdt, kun korte ord. Zonerne regnes ud fra tre grundtal: tærskelløb ${formatPaceUnit('run', BASELINES.run)}, CSS ${formatPaceUnit('swim', BASELINES.swim)} og cykeltærskel ${formatPaceUnit('bike', BASELINES.bike)}. De er forsigtige startværdier og opdateres efter testugen i uge 5. Indendørs (spinner) køres cyklen ${INDOOR_TEXT} i stedet for km/t.`;
 }
 paintZones();
+paintKost();
 
 // ---- Start ----
 buildGrid();
@@ -423,7 +465,13 @@ requestAnimationFrame(() => scrollGridTo(nowIdx, false));
 attach(store);
 const first = pickStore();
 if (first) swapTo(first);
-settings = mountSettings({ store, target: BUILD.target, version: BUILD.version, openButton: savemode, gist: typeof GistStore !== 'undefined' ? GistStore : null });
+settings = mountSettings({ store, target: BUILD.target, version: BUILD.version, openButton: savemode, gist: typeof GistStore !== 'undefined' ? GistStore : null, onWeight: kg => { weight = kg; repaintKost(); } });
+// En anden fane har ændret vægten: følg med (storage-hændelsen kommer kun fra andre faner).
+window.addEventListener('storage', ev => {
+  if (ev.key !== null && ev.key !== WEIGHT_KEY) return;
+  const next = loadWeight();
+  if (next !== weight) { weight = next; repaintKost(); }
+});
 // Artifact: claude.use('db') kan tage op til 10 s. Start straks på LocalStore (alt gemmes lokalt), og skift, når databasen er klar.
 if (BUILD.target === 'artifact' && typeof ArtifactDbStore !== 'undefined') {
   savemode.textContent = 'Forbinder…';

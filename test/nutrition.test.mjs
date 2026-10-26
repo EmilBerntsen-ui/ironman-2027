@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { plan, addDays, isoDate, RACE, TUNEUP } from '../src/plan.js';
 import {
-  DAY_TYPES, KCAL_BAND, KCAL_BASE_PER_KG, KCAL_TRAIN_PER_KG_H, KOST_REPORT_URL, WEIGHT_ERROR, WEIGHT_KEY,
+  DAY_TYPES, KCAL_BAND, KCAL_BASE_PER_KG, KCAL_TRAIN_PER_KG_H, KOST_DISCLAIMER, KOST_REPORT_URL, WEIGHT_ERROR, WEIGHT_KEY,
   dayMinutes, dayNutrition, dayType, energyLine, isHardSession, kcalEstimate, kostGuide, parseWeight, readWeight, saveWeight,
   sessionFueling, weekKcalAverage,
 } from '../src/nutrition.js';
@@ -123,6 +123,7 @@ test('chip: "Moderat · 3.600–3.950 kcal · 420–700 g KH" med vægt, g/kg ud
 test('ugens gennemsnit: kun dage med et kcal-estimat tæller (ikke opladning og race); null uden vægt', () => {
   const w = weeks[0];
   const avg = weekKcalAverage(w.days, w.start, 70);
+  assert.match(avg.text, /^ca\. [\d.]+ kcal$/);
   const expected = w.days.reduce((a, d) => a + 70 * 37 + dayMinutes(d) * (70 * 8.5) / 60, 0) / 7;
   assert.equal(avg.avg, Math.round(expected / 50) * 50);
   assert.equal(avg.days, 7);
@@ -355,8 +356,8 @@ test('guiden: dagtabel med alle dagtyper, før/under/efter, løbsuge, tilskud, a
   const all = JSON.stringify(g);
   for (const x of ['D-vitamin', '10 µg', 'oktober til april', 'ferritin', 'batch-testede', '10–15 %', 'Anti Doping Danmark', 'Informed-Sport',
     '36 til 48 t', 'Intet nyt', 'Køge Jernmand', 'hvilepuls', '0,5 kg over 2 til 3 uger', '37 kcal', '8,5 kcal', '±5 %', 'estimat', 'NNR 2023',
-    '30–60 g kulhydrat/t', '60–90 g/t', '500–700 mg natrium', 'Under 75 min', '1–1,2 g/kg/t', '0,3 g/kg protein', '1,25–1,5 L pr. kg tabt',
-    'Generel vejledning, ikke individuel lægefaglig rådgivning']) assert.ok(all.includes(x), x);
+    '30–60 g kulhydrat/t', '60–90 g/t', '500–700 mg natrium', 'Under 75 min', '1–1,2 g/kg/t', '0,3 g/kg protein', '1,25–1,5 L pr. kg tabt']) assert.ok(all.includes(x), x);
+  assert.equal(KOST_DISCLAIMER, 'Generel vejledning, ikke individuel lægefaglig rådgivning.', 'forbeholdet vises øverst i guiden');
   assert.deepEqual(g[5].link, { href: KOST_REPORT_URL, text: 'Kildegrundlag og alle tal (docs/research/ernaering-kilder.md)' });
   assert.equal(KOST_REPORT_URL, 'https://github.com/EmilBerntsen-ui/ironman-2027/blob/main/docs/research/ernaering-kilder.md');
 });

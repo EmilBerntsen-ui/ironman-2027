@@ -22,6 +22,7 @@
 // Vægten er personlig: den gemmes kun i localStorage på enheden (WEIGHT_KEY), aldrig i Gist/Artifact-databasen og aldrig i .ics.
 import { RACE, TUNEUP, addDays, isoDate } from './plan.js';
 
+export const KOST_DISCLAIMER = 'Generel vejledning, ikke individuel lægefaglig rådgivning.';
 export const KOST_REPORT_URL = 'https://github.com/EmilBerntsen-ui/ironman-2027/blob/main/docs/research/ernaering-kilder.md';
 
 export const WEIGHT_KEY = 'im2027-weight-kg';
@@ -108,7 +109,7 @@ export function kcalEstimate(weightKg, minutes = 0) {
 }
 
 // Gennemsnit pr. dag for en uge (days = uge.days, start = ugens mandag). Opladnings- og racedage har intet kcal-tal og udelades.
-// → { avg, days, skipped } eller null (uden vægt, eller hvis ingen dage har et estimat).
+// → { avg, days, skipped, text: 'ca. 3.650 kcal' } eller null (uden vægt, eller hvis ingen dage har et estimat).
 export function weekKcalAverage(days, start, weightKg) {
   const w = validWeight(weightKg);
   if (w === null) return null;
@@ -117,7 +118,9 @@ export function weekKcalAverage(days, start, weightKg) {
     if (!DAY_TYPES[dayType(d, addDays(start, i))].kcal) return;
     sum += kcalRaw(w, dayMinutes(d)); n++;
   });
-  return n ? { avg: step(sum / n, 50), days: n, skipped: days.length - n } : null;
+  if (!n) return null;
+  const avg = step(sum / n, 50);
+  return { avg, days: n, skipped: days.length - n, text: `ca. ${grp(avg)} kcal` };
 }
 
 // ---- Dagens kost ----
@@ -300,7 +303,6 @@ export function kostGuide(weightKg = null) {
       title: 'Kilder',
       notes: [
         'Alle tal og kilder står i rapporten. Det, der er praktiske forslag frem for kildetal, er markeret dér.',
-        'Generel vejledning, ikke individuel lægefaglig rådgivning.',
       ],
       link: { href: KOST_REPORT_URL, text: 'Kildegrundlag og alle tal (docs/research/ernaering-kilder.md)' },
     },

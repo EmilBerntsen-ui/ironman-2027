@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { bundleJs } from '../build/bundle.mjs';
 import { plan } from '../src/plan.js';
+import { KOST_DISCLAIMER, KOST_REPORT_URL, WEIGHT_KEY, dayMinutes, dayNutrition, dayType, weekKcalAverage } from '../src/nutrition.js';
 import { fakeDocument, fakeWindow, memoryStorage } from './dom-harness.mjs';
 import { settle } from './fake-gist.mjs';
 
@@ -446,4 +447,170 @@ test('zoneguiden regnes ud fra grundtallene og taler om fart, ikke watt', () => 
   for (const x of ['5:45 /km', '2:10 /100 m', '29 km/t', 'testugen', 'efter følelse og kadence']) assert.ok(note.includes(x), x);
   assert.ok(!/watt|ftp/i.test(note));
   assert.ok(!/watt|ftp/i.test(readFileSync(new URL('../src/app.html', import.meta.url), 'utf8')));
+});
+
+// ---- Kost: chips, ugesum, blok i arket, guide og vægt ----
+
+const R = (a, b) => `${a}–${b}`; // kulhydratintervaller skrives ikke ud i kildefilen (private-ord-tjekket)
+const W70 = () => ({ storage: memoryStorage({ [WEIGHT_KEY]: '70' }) });
+const chips = html => [...html.matchAll(/<span class="kc k-(\w+)">([^<]*)<\/span>/g)].map(m => ({ type: m[1], text: m[2] }));
+const dayChip = (wi, di) => { const w = planWeeks[wi]; return dayNutrition(dayType(w.days[di], new Date(w.start.getFullYear(), w.start.getMonth(), w.start.getDate() + di)), dayMinutes(w.days[di]), 70).chip; };
+
+test('kost: hver dag i ugegitteret har en chip med dagtype · kcal · gram, lige efter datoen og før pas', () => {
+  const app = loadApp(W70());
+  const list = chips(app.$('grid').innerHTML);
+  assert.equal(list.length, 43 * 7);
+  assert.match(app.$('grid').innerHTML, /<span class="dt">I dag · 2\. nov\.<\/span><span class="kc k-hvile">Hvile · 2\.450–2\.700 kcal · 210–350 g KH<\/span><div class="card/);
+  // lørdag i uge 2: 60 min cykel + 10 min brick = moderat
+  assert.equal(dayChip(1, 5), 'Moderat · 3.100–3.450 kcal · 420–700 g KH');
+  assert.ok(list.some(c => c.text === 'Moderat · 3.100–3.450 kcal · 420–700 g KH'));
+  for (const [wi, di] of [[0, 0], [1, 1], [20, 5], [31, 5], [41, 2]]) assert.ok(list.some(c => c.text === dayChip(wi, di)), `${wi}/${di}`);
+  assert.equal(list.filter(c => c.type === 'opladning').length, 3, 'fredag og lørdag før IRONMAN, lørdag før Køge');
+  assert.equal(list.filter(c => c.type === 'race').length, 2);
+  assert.deepEqual([...new Set(list.filter(c => c.type === 'opladning').map(c => c.text))], ['Opladning · 700–840 g KH']);
+  assert.deepEqual([...new Set(list.filter(c => c.type === 'race').map(c => c.text))], ['Race · se løbsdagsplanen']);
+  assert.ok(list.some(c => c.type === 'lang' && c.text.startsWith('Lang · ') && c.text.endsWith(' kcal · 560–840 g KH')));
+});
+
+test('kost: i dagslisten (telefon) står chippen i dagens overskrift', () => {
+  const app = loadApp(W70()); // uge 2 vises
+  const html = app.$('agenda').innerHTML;
+  assert.equal(chips(html).length, 7);
+  assert.match(html, /<div class="lbl">Mandag<small>2\. nov\. · i dag<\/small><span class="kc k-hvile">Hvile · 2\.450–2\.700 kcal · 210–350 g KH<\/span><\/div>/);
+  assert.match(html, /<div class="lbl">Lørdag<small>7\. nov\.<\/small><span class="kc k-moderat">Moderat · 3\.100–3\.450 kcal · 420–700 g KH<\/span><\/div>/);
+});
+
+test('kost uden vægt: chips viser g/kg og ingen kcal, og der er ingen ugesum for kost', () => {
+  const app = loadApp();
+  const list = chips(app.$('grid').innerHTML);
+  assert.equal(list.length, 43 * 7);
+  assert.ok(list.every(c => !/kcal/.test(c.text)), 'ingen kcal uden vægt');
+  assert.ok(list.some(c => c.text === `Moderat · ${R(6, 10)} g/kg KH`));
+  assert.ok(list.some(c => c.text === `Lang · ${R(8, 12)} g/kg KH`));
+  assert.ok(list.some(c => c.text === `Opladning · ${R(10, 12)} g/kg KH`));
+  assert.ok(list.some(c => c.text === `Hvile · ${R(3, 5)} g/kg KH`));
+  assert.doesNotMatch(app.$('grid').innerHTML, /Kost ⌀\/dag/);
+  assert.doesNotMatch(app.$('agenda').innerHTML, /Kost ⌀\/dag/);
+});
+
+test('kost: ugesummen viser ⌀ kcal pr. dag (estimat) med vægt, i både ugegitter og dagsliste', () => {
+  const app = loadApp(W70());
+  const w = planWeeks[1], avg = weekKcalAverage(w.days, w.start, 70);
+  assert.match(avg.text, /^ca\. 3\.\d00 kcal$|^ca\. 3\.\d50 kcal$/);
+  assert.ok(app.$('grid').innerHTML.includes(`<div class="row kost"><span>Kost ⌀/dag, estimat</span><b>${avg.text}</b></div>`));
+  assert.ok(app.$('agenda').innerHTML.includes(`<span>Kost ⌀/dag, estimat <b>${avg.text}</b></span>`));
+  // raceugen: opladnings- og racedage udelades, og gennemsnittet er stadig et tal
+  const last = planWeeks[42], lastAvg = weekKcalAverage(last.days, last.start, 70);
+  assert.equal(lastAvg.days, 4);
+  assert.ok(app.$('grid').innerHTML.includes(`<b>${lastAvg.text}</b>`));
+});
+
+test('kost i arket: "Kost"-blok med dagen og Før / Under / Efter, mellem fakta og formularen', () => {
+  const app = loadApp(W70());
+  openSheetOf(app, K.runEasy); // u02 tirsdag: roligt løb med strides, 30 min
+  const html = app.$('sh').innerHTML;
+  assert.match(html, /<section class="sh-kost"><h4>Kost<\/h4><dl><dt>Dagen<\/dt><dd>Let · 3\.\d{3}–3\.\d{3} kcal \(estimat\) · 350–490 g KH<small>Protein ca\. 110 g om dagen \(84–140 g\): 4–5 måltider à ca\. 21 g<\/small><\/dd>/);
+  assert.match(html, /<dt>Før<\/dt><dd>Normal kost, ingen særlig forberedelse<\/dd><dt>Under<\/dt><dd>Kun vand<\/dd><dt>Efter<\/dt><dd>Måltid inden for 1–2 t med 20–40 g protein \+ kulhydrat<\/dd>/);
+  assert.match(html, /Estimat og generel vejledning\. Se guiden Kost\./);
+  assert.doesNotMatch(html, /Angiv din vægt/, 'vægten er kendt');
+  assert.ok(html.indexOf('sh-rec') < html.indexOf('sh-kost') && html.indexOf('sh-kost') < html.indexOf('<form'));
+});
+
+test('kost i arket: lang cykeltur (gram med vægt, koffein, 60–90 g/t og natrium), løbsdag og hviledag', () => {
+  const app = loadApp(W70());
+  const long = keyOf(s => s.t === 'Lang cykeltur' && s.m >= 300);
+  openSheetOf(app, long);
+  let html = app.$('sh').innerHTML;
+  assert.match(html, /<dt>Før<\/dt><dd>Måltid 2–3 t før med 1–2 g\/kg kulhydrat \(70–140 g\), lidt fedt og fiber\. Valgfrit: koffein ca\. 3 mg\/kg \(ca\. 210 mg\) ca\. 60 min før/);
+  assert.match(html, /<dt>Under<\/dt><dd>60–90 g\/t \(glukose \+ fruktose\)\. Drik så du hverken taber over 2 % eller tager på og tilsæt 500–700 mg natrium pr\. liter<\/dd>/);
+  assert.match(html, /<dd>Lang · [\d.]+–[\d.]+ kcal \(estimat\) · 560–840 g KH/);
+  openSheetOf(app, K.ironman);
+  html = app.$('sh').innerHTML;
+  assert.match(html, /<dd>Race: se løbsdagsplanen i guiden Kost<small>[^<]*<\/small><small>Løbets energiunderskud kan ikke lukkes/);
+  assert.match(html, /<dt>Før<\/dt><dd>Morgenmad 1–4 g\/kg kulhydrat 1–4 t før \(70–280 g\)/);
+  assert.match(html, /<dt>Under<\/dt><dd>Cykel 60–90 g kulhydrat\/t/);
+  openSheetOf(app, K.rest);
+  html = app.$('sh').innerHTML;
+  assert.match(html, /<dt>Dagen<\/dt><dd>Hvile · /);
+  assert.doesNotMatch(html, /<dt>Før<\/dt>|<dt>Under<\/dt>|<dt>Efter<\/dt>/, 'hvile har ingen fueling pr. pas');
+});
+
+test('kost i arket uden vægt: g/kg og en opfordring til at angive vægten', () => {
+  const app = loadApp();
+  openSheetOf(app, keyOf(s => s.t === 'Lang cykeltur' && s.m >= 300));
+  const html = app.$('sh').innerHTML;
+  assert.ok(html.includes(`<dd>Lang · ${R(8, 12)} g/kg KH`));
+  assert.match(html, /Måltid 2–3 t før med 1–2 g\/kg kulhydrat, lidt fedt og fiber\./, 'uden gram i parentes');
+  assert.doesNotMatch(html, /\(70–140 g\)|ca\. 210 mg/);
+  assert.match(html, /Angiv din vægt i indstillingerne \(knappen øverst\) for at få gram og kcal\./);
+});
+
+test('kost: vægten angives i indstillingerne, tegner chips og ugesummer om med det samme, og kommer aldrig i fremdriften', () => {
+  const app = loadApp();
+  assert.ok(!app.$('grid').innerHTML.includes(' kcal'));
+  app.$('savemode').click();
+  const dlg = app.dialog();
+  assert.ok(dlg.byId('setWeight'), 'feltet findes');
+  dlg.byId('setWeight').value = '70';
+  dlg.buttons('Gem vægt')[0].click();
+  assert.equal(app.storage.getItem(WEIGHT_KEY), '70');
+  assert.match(app.$('grid').innerHTML, /Hvile · 2\.450–2\.700 kcal · 210–350 g KH/);
+  assert.match(app.$('agenda').innerHTML, /Hvile · 2\.450–2\.700 kcal · 210–350 g KH/);
+  assert.match(app.$('grid').innerHTML, /Kost ⌀\/dag, estimat/);
+  assert.match(app.$('kostGuide').innerHTML, /<th>Med din vægt<\/th>/);
+  check(app, firstSession());
+  const saved = app.storage.getItem('im2027-progress-v2');
+  assert.ok(saved && !/70|weight|vægt/i.test(saved.replace(/"(updatedAt|at)":"[^"]*"/g, '')), 'fremdriften indeholder ingen vægt');
+  assert.deepEqual(app.storage.keys().filter(k => k !== WEIGHT_KEY && k !== 'im2027-progress-v2' && k !== 'im2027-device'), []);
+  dlg.byId('setWeight').value = '';
+  dlg.buttons('Gem vægt')[0].click();
+  assert.equal(app.storage.getItem(WEIGHT_KEY), null);
+  assert.ok(!app.$('grid').innerHTML.includes(' kcal'), 'uden vægt igen: g/kg');
+  assert.doesNotMatch(app.$('kostGuide').innerHTML, /Med din vægt/);
+});
+
+test('kost: en ændring af vægten i en anden fane (storage-hændelse) følges, og andre nøgler ignoreres', () => {
+  const app = loadApp();
+  app.storage.setItem(WEIGHT_KEY, '80');
+  app.$('grid').innerHTML = 'MARK';
+  app.win.fire('storage', { key: 'im2027-andet' });
+  assert.equal(app.$('grid').innerHTML, 'MARK', 'en anden nøgle tegner ikke om');
+  app.win.fire('storage', { key: WEIGHT_KEY });
+  assert.notEqual(app.$('grid').innerHTML, 'MARK');
+  assert.match(app.$('grid').innerHTML, /Hvile · 2\.800–3\.100 kcal · 240–400 g KH/, '80 kg: 2.960 kcal ±5 %');
+  app.storage.removeItem(WEIGHT_KEY);
+  app.win.fire('storage', { key: null });
+  assert.ok(!app.$('grid').innerHTML.includes(' kcal'));
+});
+
+test('kost: en ødelagt vægt i lageret ignoreres (g/kg)', () => {
+  for (const bad of ['abc', '5', '5000', '<b>70</b>']) {
+    const app = loadApp({ storage: memoryStorage({ [WEIGHT_KEY]: bad }) });
+    assert.ok(!app.$('grid').innerHTML.includes(' kcal'), bad);
+  }
+});
+
+test('kost-guiden: dagtabel, før/under/efter, løbsuge, tilskud, advarselstegn, forbehold og et sikkert link til rapporten', () => {
+  const app = loadApp();
+  const html = app.$('kostGuide').innerHTML;
+  assert.ok(html.startsWith(`<p class="kost-note">${KOST_DISCLAIMER}</p>`));
+  for (const h of ['Dag for dag', 'Før, under og efter', 'Løbsuge og løbsdag', 'Kosttilskud', 'Advarselstegn og vægt', 'Kilder']) assert.ok(html.includes(`<h3>${h}</h3>`), h);
+  assert.match(html, /<table class="zones kost-table"><tr><th>Dagtype<\/th><th>Træning<\/th><th>Kulhydrat g\/kg<\/th><\/tr>/);
+  assert.ok(html.includes(`<td>Lang</td><td>over 180 min</td><td>${R(8, 12)}</td>`));
+  for (const x of ['D-vitamin', 'ferritin', 'batch-testede', 'Intet nyt', 'Køge Jernmand', '500–700 mg natrium', '1,25–1,5 L pr. kg tabt']) assert.ok(html.includes(x), x);
+  assert.ok(html.includes(`<a href="${KOST_REPORT_URL}" target="_blank" rel="noopener noreferrer">`));
+  assert.doesNotMatch(html, /<script|\son[a-z]+=/i);
+  assert.doesNotMatch(html, /Med din vægt/);
+  const body = readFileSync(new URL('../src/app.html', import.meta.url), 'utf8');
+  assert.ok(body.includes('<details class="guide-wrap" id="kostWrap">') && body.includes('<summary>Guide: kost</summary>'));
+  assert.ok(!/https?:\/\//.test(body), 'siden selv nævner ingen eksterne adresser (CSP-testen i site.test.mjs); linket tegnes af app.js');
+});
+
+test('kost i Artifact-bygningen: samme chips og samme vægtfelt i indstillingerne', () => {
+  const app = loadApp({ target: 'artifact', ...W70() });
+  assert.match(app.$('grid').innerHTML, /Hvile · 2\.450–2\.700 kcal · 210–350 g KH/);
+  app.$('savemode').click();
+  const dlg = app.dialog();
+  assert.equal(dlg.byId('setWeight').value, '70');
+  assert.match(dlg.textContent, /sendes aldrig til GitHub, til kalenderen eller andre steder/);
 });
