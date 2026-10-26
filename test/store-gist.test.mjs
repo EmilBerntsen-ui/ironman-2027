@@ -930,6 +930,30 @@ test('timeout kan sættes (timeoutMs), og connect behandler en timeout som netv�
   assert.equal(storage.getItem('im2027-gist'), null);
 });
 
+test('WebKit melder en timeout som AbortError: det er stadig "ikke i tide", mens andre fejl viser deres type uden token og adresse', async () => {
+  const abortError = () => Object.assign(new Error('Fetch is aborted'), { name: 'AbortError' }); // som iOS: ikke signal.reason (TimeoutError)
+  const webkitHang = (url, init) => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(abortError())));
+  await assert.rejects(GistStore.connect(TEST_TOKEN, { fetch: webkitHang, storage: makeStorage(), timeoutMs: 20 }),
+    e => e.code === 'network' && e.message === 'GitHub svarede ikke i tide');
+  const ctx = setup();
+  const { store } = device(ctx, 'deva0001', { deps: { fetch: webkitHang, timeoutMs: 20 } });
+  store.save('u05', '1-0', { done: true });
+  await store.syncNow();
+  assert.equal(store.status.state, 'offline');
+  assert.equal(store.status.detail, 'GitHub svarede ikke i tide', 'ikke "Ingen forbindelse" på iPhone');
+  store.dispose();
+  // En AbortError uden at vores signal er afbrudt (fx brugeren forlader siden) er ingen timeout.
+  const aborted = () => Promise.reject(abortError());
+  await assert.rejects(GistStore.connect(TEST_TOKEN, { fetch: aborted, storage: makeStorage() }),
+    e => e.code === 'network' && e.message === 'Ingen forbindelse til GitHub (AbortError)');
+  const loadFailed = () => Promise.reject(new TypeError('Load failed: https://api.github.com/gists'));
+  await assert.rejects(GistStore.connect(TEST_TOKEN, { fetch: loadFailed, storage: makeStorage() }), e => {
+    assert.equal(e.message, 'Ingen forbindelse til GitHub (TypeError)');
+    assert.doesNotMatch(e.message, new RegExp(`${TEST_TOKEN}|api\\.github|gists`));
+    return e.code === 'network';
+  });
+});
+
 test('et 200-svar uden files er et ødelagt svar: det skrives ikke som en tom gist over, og intet lokalt bliver beskidt', async () => {
   const ctx = setup({ files: { 'u05.json': weekFile('u05', { '1-1': entry('2026-11-24T08:00:00.000Z', 'devb0001', { note: 'deres' }) }) } });
   const { store, storage } = device(ctx, 'deva0001');

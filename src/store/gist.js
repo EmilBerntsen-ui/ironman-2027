@@ -56,12 +56,16 @@ async function ghFetch(deps, token, method, target, { body, etag } = {}) {
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (etag) headers['If-None-Match'] = etag;
+  // signal: afbryder både hængende forbindelser og hængende svarlæsning. Timeout er en netværksfejl (prøv igen med backoff).
+  const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(deps.timeoutMs) : undefined;
   try {
-    // signal: afbryder både hængende forbindelser og hængende svarlæsning. Timeout er en netværksfejl (prøv igen med backoff).
-    const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(deps.timeoutMs) : undefined;
     return await deps.fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: 'no-store', signal });
   } catch (e) {
-    throw new GistError('network', e && e.name === 'TimeoutError' ? 'GitHub svarede ikke i tide' : 'Ingen forbindelse til GitHub');
+    // WebKit (iOS) melder en timeout som AbortError ("Fetch is aborted") og ikke som TimeoutError: så er det en timeout, hvis vores signal er afbrudt.
+    const name = e && typeof e.name === 'string' ? e.name : '';
+    if (name === 'TimeoutError' || (name === 'AbortError' && signal && signal.aborted)) throw new GistError('network', 'GitHub svarede ikke i tide');
+    // Kun fejlens type (fx TypeError) følger med, så telefonen viser hvilken fejl det var. Aldrig token, adresse eller fejlens tekst.
+    throw new GistError('network', `Ingen forbindelse til GitHub${/^[A-Za-z]{1,40}$/.test(name) ? ` (${name})` : ''}`);
   }
 }
 
