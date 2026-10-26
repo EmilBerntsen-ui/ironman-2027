@@ -152,3 +152,30 @@ test('.ics: hver DESCRIPTION har en "Anbefalet"-linje med fart (undtagen styrke)
   const run = unesc(/^DESCRIPTION:(.*)$/m.exec(events.find(e => e.startsWith('UID:u06-1-0@')))[1]);
   assert.match(run, /\nAnbefalet: 6:45–7:15 \/km · hovedsæt 5:25–5:35 \/km\n/);
 });
+
+test('.ics: "Energi undervejs" er én ekstra beskrivelseslinje, kun for pas over 75 min, og kun i g/t uden vægt eller kcal', () => {
+  const ics = buildIcs(weeks, new Date('2026-10-22T12:00:00Z')).replace(/\r\n /g, '');
+  const events = ics.split('BEGIN:VEVENT\r\n').slice(1);
+  const unesc = t => t.replace(/\\n/g, '\n').replace(/\\([,;\\])/g, '$1');
+  let withLine = 0, exactly75 = 0;
+  sessions.filter(x => x.s.s !== 'rest').forEach(({ w, di, si, s }) => {
+    const ev = events.find(e => e.startsWith(`UID:${w.id}-${di}-${si}@ironman2027`));
+    const desc = unesc(/^DESCRIPTION:(.*)$/m.exec(ev)[1]);
+    const lines = desc.split('\n').filter(l => l.startsWith('Energi undervejs: '));
+    if (s.m <= 75) { assert.equal(lines.length, 0, `${w.id}-${di}-${si} ${s.t} (${s.m} min)`); if (s.m === 75) exactly75++; return; }
+    withLine++;
+    assert.equal(lines.length, 1, `${w.id}-${di}-${si} ${s.t} (${s.m} min)`);
+    const want = s.s === 'race' && s.legs ? /^Energi undervejs: cykel 60–90 g kulhydrat\/t \(glukose \+ fruktose\), løb 30–90 g\/t efter tolerance$/
+      : s.m <= 150 ? /^Energi undervejs: 30–60 g kulhydrat\/t$/ : /^Energi undervejs: 60–90 g\/t \(glukose \+ fruktose\)$/;
+    assert.match(lines[0], want, `${s.t} (${s.m} min)`);
+    const pace = desc.split('\n').findIndex(l => l.startsWith('Anbefalet: ')), at = desc.split('\n').indexOf(lines[0]);
+    if (pace >= 0) assert.equal(at, pace + 1, 'lige efter "Anbefalet"-linjen');
+    assert.ok(desc.indexOf(lines[0]) < desc.indexOf(`Uge ${w.n} · `), 'før ugelinjen');
+  });
+  assert.ok(withLine > 50 && exactly75 > 0, `${withLine} pas over 75 min, ${exactly75} på præcis 75`);
+  assert.doesNotMatch(ics, /kcal|estimat|Din vægt|g\/kg/, 'ingen vægt, intet kcal og ingen g/kg i kalenderen');
+  const ironman = unesc(/^DESCRIPTION:(.*)$/m.exec(events.find(e => e.startsWith('UID:u43-6-0@')))[1]);
+  assert.match(ironman, /\nEnergi undervejs: cykel 60–90 g kulhydrat\/t/);
+  const long = unesc(/^DESCRIPTION:(.*)$/m.exec(events.find(e => e.startsWith('UID:u06-5-0@')))[1]);
+  assert.match(long, /\nEnergi undervejs: 30–60 g kulhydrat\/t\n/);
+});

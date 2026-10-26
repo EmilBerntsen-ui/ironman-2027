@@ -3,6 +3,7 @@
 import { addDays, PH } from './plan.js';
 import { isDone } from './progress.js';
 import { paceText } from './pace.js';
+import { energyLine } from './nutrition.js';
 
 const EMOJI = { swim: '🏊', bike: '🚴', run: '🏃', str: '🏋️', race: '🏁' };
 
@@ -91,7 +92,8 @@ export function buildIcs(weeks, now = new Date(), { progress = null, schedule = 
         const done = isDone(e);
         const mark = done ? `Gennemført${Number.isInteger(e.min) && e.min > 0 ? ` · ${e.min} min` : ''}\n\n` : '';
         const pace = paceText(s); // "Anbefalet: …" (ikke for styrke)
-        const desc = `${mark}${s.d}${pace ? `\n${pace}` : ''}\n\nUge ${w.n} · ${PH[w.ph].name}${w.note && !noted ? '\n' + w.note : ''}`;
+        const fuel = energyLine(s); // "Energi undervejs: …" kun for pas over 75 min, kun g/t (aldrig vægt eller kcal)
+        const desc = `${mark}${s.d}${pace ? `\n${pace}` : ''}${fuel ? `\n${fuel}` : ''}\n\nUge ${w.n} · ${PH[w.ph].name}${w.note && !noted ? '\n' + w.note : ''}`;
         noted = true;
 
         const when = start === null
