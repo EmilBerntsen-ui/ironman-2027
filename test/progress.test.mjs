@@ -98,6 +98,45 @@ test('Strava-felterne dist (meter, heltal 0..1.000.000) og hr (slag/min, heltal 
   assert.equal(normalizeEntry({ done: true, updatedAt: T1, dist: 5, hr: 99, ...many }).k15, 15);
 });
 
+test('pace (faktisk fart: sek./km, sek./100 m eller km/t) er et tal 1..3600 med højst én decimal; andre værdier droppes feltet', () => {
+  const n = raw => normalizeEntry({ done: true, updatedAt: T1, ...raw });
+  assert.equal(n({ pace: 330 }).pace, 330);        // løb 5:30 /km
+  assert.equal(n({ pace: 130 }).pace, 130);        // svøm 2:10 /100 m
+  assert.equal(n({ pace: 27.5 }).pace, 27.5);      // cykel km/t
+  assert.equal(n({ pace: 27.54 }).pace, 27.5, 'rundes til én decimal');
+  assert.equal(n({ pace: 1 }).pace, 1);
+  assert.equal(n({ pace: 3600 }).pace, 3600);
+  for (const bad of [0, 0.4, -5, 3600.1, 3601, '330', '5:30', NaN, Infinity, -Infinity, null, true, [330], { v: 330 }]) assert.ok(!('pace' in n({ pace: bad })), `pace ${JSON.stringify(bad)}`);
+  // idempotent og stabil gennem serialisering
+  const e = { done: true, updatedAt: T1, dev: 'abc', at: '2026-11-24T06:57:40.000Z', min: 42, pace: 330, sig: 'run:Roligt løb' };
+  assert.deepEqual(normalizeEntry(e), e);
+  assert.deepEqual(normalizeEntry(normalizeEntry({ ...e, pace: 27.54 })), normalizeEntry({ ...e, pace: 27.54 }));
+  assert.deepEqual(parseWeekFile('u05.json', serializeWeek('u05', { '1-0': e })).week['1-0'], e);
+  assert.deepEqual(parseAny(JSON.stringify(toExport({ u05: { '1-0': e } }, T1))).u05['1-0'], e);
+  // kendt felt: tæller ikke med blandt de højst 16 ukendte felter
+  const many = Object.fromEntries(Array.from({ length: 16 }, (_, i) => [`k${i}`, i]));
+  assert.equal(n({ pace: 330, ...many }).k15, 15);
+});
+
+test('pace er merge-kompatibelt: hele posten vinder, så en post uden pace (gammel) og en med pace flettes uden at miste noget', () => {
+  const old = { done: true, updatedAt: T1, dev: 'a', min: 40 };               // uden pace (før denne version)
+  const neu = { done: true, updatedAt: T2, dev: 'b', min: 40, pace: 345 };
+  assert.deepEqual(mergeEntry(normalizeEntry(old), normalizeEntry(neu)), neu);
+  assert.deepEqual(mergeEntry(normalizeEntry(neu), normalizeEntry(old)), neu);
+  const edited = stampEntry({ done: true, min: 41 }, normalizeEntry(neu), { now: T2, dev: 'b' }); // en redigering uden pace fjerner den (hele detaljesættet erstattes)
+  assert.ok(!('pace' in edited));
+  assert.equal(stampEntry({ done: true, min: 41, pace: 340 }, normalizeEntry(neu), { now: T2, dev: 'b' }).pace, 340);
+  assert.deepEqual(mergeWeek({ '1-0': normalizeEntry(old) }, { '1-0': normalizeEntry(neu), '2-0': normalizeEntry(old) }), { '1-0': neu, '2-0': normalizeEntry(old) });
+  // v2-filer uden pace er stadig læsbare, og en ældre klient (uden KNOWN-pace) ville bevare feltet som ukendt primitiv
+  assert.ok(!('pace' in parseWeekFile('u01.json', serializeWeek('u01', { '1-0': normalizeEntry(old) })).week['1-0']));
+});
+
+test('gravsten mister også dist, hr og pace', () => {
+  assert.deepEqual(normalizeEntry({ done: false, updatedAt: T1, dev: 'abc', pace: 330 }), { done: false, updatedAt: T1, dev: 'abc' });
+  assert.deepEqual(stampEntry(null, done(T1, { pace: 330 }), { now: T2, dev: 'abc' }), { done: false, updatedAt: T2, dev: 'abc' });
+  assert.deepEqual(stampEntry({ done: false, pace: 330 }, null, { now: T2, dev: 'abc' }), { done: false, updatedAt: T2, dev: 'abc' });
+});
+
 test('gravsten mister også dist og hr', () => {
   assert.deepEqual(normalizeEntry({ done: false, updatedAt: T1, dev: 'abc', dist: 5000, hr: 150, src: 'strava', extId: '1' }), { done: false, updatedAt: T1, dev: 'abc' });
   assert.deepEqual(stampEntry(null, done(T1, { dist: 5000, hr: 150 }), { now: T2, dev: 'abc' }), { done: false, updatedAt: T2, dev: 'abc' });
