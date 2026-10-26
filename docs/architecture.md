@@ -20,6 +20,7 @@ Assumed repo and URL: `github.com/EmilBerntsen-ui/ironman-2027` (public), served
 | ICS | `✅` for done sessions and nothing else: sessions that are not done, past or future, are unchanged (no mark for missed sessions). The marks need `GIST_ID` and `GIST_READ_TOKEN`. Only `done` and `min` are read. Served at the secret path `cal/<CAL_TOKEN>/ironman-2027.ics` |
 | Strava | The Action imports activities and writes `src:"strava"` entries into the gist, so sessions show as done without ticking. Spec in [strava.md](strava.md): personal API app, rotated refresh token stored encrypted in the gist (`_strava.json`), scope `activity:read` (`--read-all` for `activity:read_all`), a manual tick always wins. Only `dist`/`hr` are new fields, and the `.ics` ignores them |
 | Pace | Every planned session carries an explicit zone (`z`, optional `main`, `ind`, `legs`) in `plan.js`; nothing is parsed from the text. `src/pace.js` derives recommended pace ranges from three baselines (run threshold 5:45 /km, swim CSS 2:10 /100 m, bike threshold 29 km/h), shown in the sheet, on the cards, in the zone guide and in each `.ics` description. The log has an optional actual `pace` (§3.1). Bike is km/h only, and indoor sessions say "efter følelse og kadence". Details in §3.8 |
+| Nutrition | `src/nutrition.js` (pure, no DOM) derives a day type from the day's planned sessions and shows carbohydrate per kg, an energy **estimate** and before/during/after fueling per session. Numbers come only from [research/ernaering-kilder.md](research/ernaering-kilder.md). The user's weight is personal: kept only in `localStorage` under `im2027-weight-kg`, never in a Store, the gist, an export or the `.ics`. Chips on every day, a weekly average, a `Kost` block in the sheet and a `Kost` guide. Details in §3.9 |
 | PWA | The whole shell is precached and served cache-first, versioned by content hash. The SW ignores `/cal/` and cross-origin requests. An update toast prompts the reload |
 
 ---
@@ -32,6 +33,7 @@ Assumed repo and URL: `github.com/EmilBerntsen-ui/ironman-2027` (public), served
 src/plan.js                 unchanged (plan data, TSS, PMC)
 src/progress.js             NEW  schema v2: pure logic, runs in Node and the browser
 src/pace.js                 NEW  recommended pace per zone, parsing and formatting of pace (pure logic, Node and browser)
+src/nutrition.js            NEW  day types, macros, energy estimate, fueling per session, weight (local only), `Kost` guide data (pure logic)
 src/ics.js                  + completion marks
 src/app.html                body markup only (head moved to the shells)
 src/shell.artifact.html     NEW  title/meta/Google Fonts/<style>/<script> wrapper (no doctype/html/head/body)
@@ -78,12 +80,12 @@ export const TARGETS = {
   artifact: {
     shell: 'src/shell.artifact.html',
     css: ['src/styles.css', 'src/settings.css'],
-    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'],
+    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'],
   },
   site: {
     shell: 'src/shell.site.html',
     css: ['src/fonts.css', 'src/styles.css', 'src/settings.css', 'src/pwa.css'],
-    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/store/local.js', 'src/store/gist.js', 'src/settings.js', 'src/app.js', 'src/pwa.js'],
+    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/store/local.js', 'src/store/gist.js', 'src/settings.js', 'src/app.js', 'src/pwa.js'],
   },
 };
 export function bundleJs(files, { target, version }) /* → string */;
@@ -403,6 +405,39 @@ Display. `paceText(session)` gives `Anbefalet: 6:45–7:15 /km · hovedsæt 5:40
 
 Actual pace. The log form has `Faktisk pace`: run `mm:ss` per km, swim `mm:ss` per 100 m, bike km/h. `parsePace` is tolerant (`5:30`, `5.30`, `5,30`, `27,5`, with or without a unit). The value is stored as `pace` (§3.1). The sheet and the card show it and compare it with the recommended range: `hurtigere end anbefalet`, `i zonen` or `langsommere end anbefalet` (for run and swim a lower number is faster). A session with a main set is compared with the main-set zone, since a typed pace is read as the main-set pace. Strength, rest, indoor bike and triathlon races have no pace field. The compliance colour of a card is still decided by duration only. An entry without `pace` but with `dist` and `min` (Strava, [strava.md](strava.md) §5) gets a derived average shown as `⌀ 6:03 /km`. It is never stored, and it is not compared when the session has a main set, because the average includes warm-up and cool-down.
 
+### 3.9 Nutrition: day types, macros and fueling
+
+Source. Every number comes from [research/ernaering-kilder.md](research/ernaering-kilder.md) (the report). Where the report marks a rule as a practical proposal, the module comment and the guide say so. The report counts per kg of body weight, and so does the module. With a known weight it shows grams, otherwise g/kg.
+
+Day type (`dayType(sessions, date)`), from the planned minutes of the day:
+
+| Type | Rule | Carbohydrate (g/kg/day) |
+|---|---|---|
+| `hvile` | 0 min | 3 to 5 |
+| `let` | up to 60 min | 5 to 7 |
+| `moderat` | 61–180 min | 6 to 10 |
+| `lang` | over 180 min | 8 to 12 |
+| `opladning` | the 2 days before IRONMAN Copenhagen (22 Aug 2027) and the day before Køge Jernmand (13 Jun 2027); wins over minutes | 10 to 12 |
+| `race` | the two race days | none (the race deficit cannot be closed) |
+
+Protein is 1.6 g/kg/day (range 1.2–2.0) in 4–5 meals of about 0.3 g/kg. Energy is an **estimate**: `weight × 37 kcal + training minutes × (weight × 8.5 kcal/h) / 60`, shown as a ±5 % range rounded to 50 kcal. The two constants are practical estimates built on report §1.2 (NNR 2023 PAL 1.6 is about 37.5 kcal/kg/day; the net MET cost of cycling and running is about 7–9 kcal/kg/h), not measured values, and ±5 % is a display band, not an error margin. `opladning` and `race` days show no kcal figure and are left out of the weekly average.
+
+Fueling per session (`sessionFueling(day, idx, { next, weight })`), from duration, zone (`isHardSession`: the zone or main-set zone is an intensity zone, see §3.8) and whether the title says `(morgen)`:
+
+| | Rule |
+|---|---|
+| Before | easy morning up to 60 min: fasted or 30 g carbohydrate. Morning intervals (or an easy morning over 60 min, up to 90): 30–50 g 30–60 min before. Long (over 60 min) or hard: meal 2–3 h before with 1–2 g/kg, little fat and fibre. Key sessions (tests, races, over 150 min, hard 90 min or more): optional caffeine about 3 mg/kg about 60 min before. A brick run follows straight after the bike. Races: breakfast 1–4 g/kg 1–4 h before, 5–10 mL/kg fluid 2–4 h before |
+| During | under 75 min: water only. 75–150 min: 30–60 g/h. Over 150 min: 60–90 g/h (glucose + fructose). From 75 min a fluid note (neither lose over 2 % nor gain weight), and over 120 min 500–700 mg sodium per litre. IRONMAN and Køge: bike 60–90 g/h, run 30–90 g/h |
+| After | normal: meal within 1–2 h with 20–40 g protein + carbohydrate. If another demanding session follows (later the same day, or a hard `(morgen)` session first thing the next day) and the day itself is demanding: 1–1.2 g/kg/h carbohydrate for 4 h + 0.3 g/kg protein. Fluid 1.25–1.5 L per kg lost from 75 min |
+
+Back-to-back is an approximation of "under 8 h to the next demanding session" (ACSM) from the plan alone, because start times are private and not in the repo. In the sheet the block shows the day and the three lines. Chips show `Moderat · 3.600–3.950 kcal · 420–700 g KH` (without weight `Moderat · 6–10 g/kg KH`).
+
+Weight (`parseWeight`, `readWeight`, `saveWeight`). 35–200 kg, comma or point. It is stored only in `localStorage` under `im2027-weight-kg` (`WEIGHT_KEY`), set from the settings dialog on both targets, and never given to a Store. `app.js` reads it at start and on a `storage` event from another tab, and redraws chips, weekly sums and the guide when it changes. A broken stored value counts as no weight.
+
+Guide. `kostGuide(weight)` returns the guide as data (day table, before/during/after, race week, supplements, warning signs, weekly weigh-in, sources) and `app.js` draws it in a collapsible section. The link to the report lives in JS, not in `app.html`, because the site document may name no external address but `api.github.com` (`test/site.test.mjs`). The guide carries the line `Generel vejledning, ikke individuel lægefaglig rådgivning.`
+
+`.ics`. `energyLine(session)` gives `Energi undervejs: 30–60 g kulhydrat/t` or `60–90 g/t (glukose + fruktose)` for sessions over 75 minutes (races: bike and run), and nothing otherwise.
+
 ---
 
 ## 4. GistStore auth and security
@@ -430,6 +465,7 @@ The token is stored as `localStorage['im2027-gist'] = {"token":"github_pat_…",
 | **Shared origin**: every Pages project site of the account lives on `https://emilberntsen-ui.github.io` and shares its localStorage | Rule: no other Pages site on this account (there are none today) unless it is first-party with no third-party JS. Otherwise move to a custom domain |
 | **A secret gist is unlisted, not private**: anyone with the gist URL or ID can read notes and RPE | The gist ID lives only in device localStorage and the `GIST_ID` Actions secret. It never appears in the repo, the page, the `.ics` or logs. Settings shows it only locally |
 | The calendar path leaks | `CAL_TOKEN` exists only as an Actions secret. It is never in the client bundle, `sw.js` or logs. CI has a leak-guard step, and the Pages artifact is deleted after deploy (§5). Rotation: change the secret and rerun; the old path disappears with the next deploy |
+| Body weight reaches the gist, the repo, an export or the `.ics` | The weight lives only in `localStorage` (`im2027-weight-kg`), outside every Store. `test/settings.test.mjs` reads everything sent to and stored in the fake gist and finds no trace of it. No example, test or doc names a real person's body data (tests use 70 kg) |
 | Notes or RPE reach the repo or the `.ics` | The ICS builder reads only `done` and `min` (a test asserts this). Progress JSON exists only in `$RUNNER_TEMP`. `.gitignore` covers export files |
 | Clickjacking the token form | Meta CSP cannot set `frame-ancestors`, so settings hides the token field when `window.top !== window.self` |
 | A device is lost | Revoke that device's PAT at github.com/settings/personal-access-tokens. Other devices keep working |
@@ -601,6 +637,7 @@ There is deliberately no mark for missed sessions: the calendar only ever shows 
 - `UID`, `DTSTART` and `DURATION` stay unchanged, so clients update events in place.
 - Only `done` and `min` are read from `progress`.
 - Every description also has a line `Anbefalet: …` (recommended pace, §3.8) before the week line. It comes from the plan alone, never from `progress`, so it is the same with and without marks. Strength sessions have none.
+- Sessions over 75 minutes have one more line, `Energi undervejs: …` (§3.9), right after `Anbefalet`. It is g/h only: never weight, kcal or g/kg, so the calendar carries no body data.
 - With `progress = null` the output is byte-identical to today's, and `test/plan.test.mjs` stays green.
 - Add `X-PUBLISHED-TTL:PT6H` and change `REFRESH-INTERVAL` to `PT6H`.
 

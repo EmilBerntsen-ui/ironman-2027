@@ -20,11 +20,12 @@ Projektet har ingen afhængigheder – kun Node (v20+). Arkitekturen er beskreve
 | `src/plan.js` | Plandata (faser, uger, pas) + `plan()`, TSS-estimat og PMC-beregning. ES-modul, bruges både af Node og inlinet i siden. |
 | `src/progress.js` | Afkrydsninger og tider (skema v2): sammenfletning, validering og eksport. Ren logik, bruges i Node og i browseren. |
 | `src/pace.js` | Anbefalet fart pr. pas ud fra tre grundtal (løbetærskel, CSS og cykeltærskel), plus visning og tolerant indtastning af faktisk pace. Ren logik, bruges i Node og i browseren. |
-| `src/app.html`, `src/app.js`, `src/styles.css` | Siden: kalender, detaljevisning med log, præstationsgraf og guide. |
+| `src/nutrition.js` | Kost: dagtyper, kulhydrat pr. kg, energi (estimat), før/under/efter pr. pas, vægt (kun lokalt) og kostguiden som data. Ren logik, bruges i Node og i browseren. |
+| `src/app.html`, `src/app.js`, `src/styles.css` | Siden: kalender, detaljevisning med log, præstationsgraf og guides. |
 | `src/ics.js` | Kalendereksport (RFC 5545). |
 | `build.mjs`, `build/` | Byggescript og mål: `artifact` (claude.ai) og `site` (GitHub Pages). |
 | `scripts/` | Hent fremdrift til kalenderen (CI), opret Gist'en fra terminalen og Strava-synk (`strava-sync.mjs` i CI, `strava-auth.mjs` til engangsgodkendelsen, fælles kode i `scripts/lib/`). |
-| `docs/` | Arkitektur, [Strava-design](docs/strava.md) og guides. |
+| `docs/` | Arkitektur, [Strava-design](docs/strava.md), guides og [kildebaseret kostrapport](docs/research/ernaering-kilder.md). |
 | `test/` | Tests af plan, fremdrift, build og .ics-format. |
 
 ## Byg og test
@@ -60,4 +61,5 @@ Bemærk: Importerer du filen igen efter ændringer i planen, kan nogle apps lave
 - Eksamensugerne (uge 7–8 og 30–31) er antaget.
 - 10 km (uge 14) og halvmaraton (uge 26) er pladsholdere: find et lokalt løb.
 - Fartzonerne regnes ud fra tre forsigtige grundtal i `src/pace.js` (løbetærskel 5:45 /km, CSS 2:10 /100 m, cykeltærskel 29 km/t). De opdateres efter testugen i uge 5, og så flytter alle zoner sig med. Cykel vises kun i km/t; indendørs står der "efter følelse og kadence".
+- Kost: tallene kommer fra [kostrapporten](docs/research/ernaering-kilder.md). Energi er et estimat (vægt × 37 kcal + træningstimer × vægt × 8,5 kcal, ±5 %), og de to konstanter er praktiske estimater, ikke målte tal. Din vægt angives i indstillingerne, gemmes kun på enheden og kommer aldrig i Gist, eksport eller kalender. Kalenderen får kun en linje med g/t til pas over 75 min.
 - TSS er et groft estimat (minutter × intensitet² × 100/60), og start-CTL er sat til 25.
