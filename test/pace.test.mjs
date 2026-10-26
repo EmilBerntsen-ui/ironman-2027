@@ -1,6 +1,7 @@
 // Anbefalet fart (src/pace.js): zoner ud fra tre grundtal, formatering, tolerant indtastning, beregning og sammenligning.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { PH, plan } from '../src/plan.js';
 import {
   BASELINES, INDOOR_TEXT, comparePace, derivePace, formatPace, formatRange, guideRows, paceCompact, paceSport, paceText, parsePace, zoneRange,
 } from '../src/pace.js';
@@ -179,4 +180,87 @@ test('guideRows: zonetabellen følger grundtallene og nævner hverken watt eller
   assert.deepEqual(rows.find(r => r.name === 'IM-fart'), { name: 'IM-fart', run: '6:20–6:35', swim: '2:15–2:20', bike: '24–26' });
   assert.equal(rows.find(r => r.name === 'Z1').bike, 'under 22');
   assert.ok(!/watt|ftp/i.test(JSON.stringify(rows)));
+});
+
+// ---- Plandata: hvert pas har en zone og en fartslinje ----
+
+const weeks = plan();
+const sessions = weeks.flatMap(w => w.days.flatMap((d, di) => d.map((s, si) => ({ w, di, si, s, where: `uge ${w.n} dag ${di} pas ${si}: ${s.t}` }))));
+
+test('hvert pas har en zone; styrke og hvile har ingen fart, alt andet har en fartslinje eller indendørsteksten', () => {
+  assert.ok(sessions.length > 400);
+  for (const { s, where } of sessions) {
+    assert.equal(typeof s.z, 'string', `zone mangler: ${where}`);
+    const text = paceText(s);
+    if (s.s === 'rest' || s.s === 'str') {
+      assert.equal(s.z, s.s, where);
+      assert.equal(text, null, where);
+      assert.equal(paceCompact(s), null, where);
+      assert.equal(paceSport(s), null, where);
+      continue;
+    }
+    assert.equal(typeof text, 'string', `fartslinje mangler: ${where}`);
+    assert.ok(text.startsWith('Anbefalet: '), where);
+    assert.ok(/\d:\d\d \/(km|100 m)|\d km\/t|\d,5 km\/t|hård og jævn|følelse og kadence/.test(text), `${where}: ${text}`);
+    assert.ok(!/watt|ftp/i.test(text), where);
+  }
+});
+
+test('zonerne passer til sporten: grenens zone har et interval, tests har ingen, og hovedsættet har et interval', () => {
+  for (const { s, where } of sessions) {
+    if (s.s === 'rest' || s.s === 'str') continue;
+    if (s.legs) {
+      assert.equal(s.s, 'race', where);
+      for (const sp of ['swim', 'bike', 'run']) assert.ok(zoneRange(sp, s.legs[sp]), `${where}: ${sp}`);
+      continue;
+    }
+    if (s.z === 'test') { assert.ok(!s.main, where); continue; }
+    const sp = s.s === 'race' ? 'run' : s.s;
+    assert.ok(zoneRange(sp, s.z), `${where}: ${sp}/${s.z}`);
+    if (s.main) assert.ok(zoneRange(sp, s.main), `${where}: hovedsæt ${sp}/${s.main}`);
+  }
+});
+
+test('indendørs cykelpas viser "efter følelse og kadence" i stedet for km/t; pas der kan være begge dele viser begge', () => {
+  const indoor = sessions.filter(x => x.s.ind === true);
+  assert.ok(indoor.length >= 10);
+  for (const { s, where } of indoor) {
+    assert.equal(s.s, 'bike', where);
+    assert.equal(paceText(s), `Anbefalet: ${INDOOR_TEXT}`, where);
+    assert.ok(!/km\/t/.test(paceText(s)), where);
+    assert.equal(paceSport(s), null, where);
+  }
+  const either = sessions.filter(x => x.s.ind === 'opt');
+  assert.ok(either.length >= 30);
+  for (const { s, where } of either) {
+    assert.equal(s.s, 'bike', where);
+    assert.match(paceText(s), new RegExp(`km/t · indendørs: ${INDOOR_TEXT}$`), where);
+  }
+  // fredagens spinner om vinteren er indendørs
+  const fri = weeks.find(w => w.ph === 'base1' && w.k === 'build').days[4][0];
+  assert.equal(fri.ind, true);
+});
+
+test('tests (løb, svøm, cykel) har zonen "test" og ingen fast fart', () => {
+  const tests = sessions.filter(x => /test/i.test(x.s.t));
+  assert.ok(tests.length >= 24);
+  for (const { s, where } of tests) assert.equal(s.z, 'test', where);
+  assert.deepEqual([...new Set(tests.map(x => x.s.t))].sort(), ['Cykeltest', 'Løbetest', 'Svømmetest (morgen)']);
+});
+
+test('triatlon-løbene har en zone pr. gren; løbs- og halvmaratonløbene løbefart', () => {
+  const ironman = sessions.find(x => x.s.t === 'IRONMAN').s;
+  assert.equal(paceText(ironman), 'Anbefalet: svøm 2:15–2:20 /100 m · cykel 24–26 km/t · løb 6:20–6:35 /km');
+  const koege = sessions.find(x => x.s.t.includes('Køge')).s;
+  assert.equal(paceText(koege), 'Anbefalet: svøm 2:15–2:20 /100 m · cykel 26–27,5 km/t · løb 5:55–6:05 /km');
+  const events = sessions.filter(x => x.s.s === 'race' && !x.s.legs);
+  assert.deepEqual(events.map(x => x.s.t), ['10 km-løb', 'Halvmaraton']);
+  assert.equal(paceText(events[0].s), 'Anbefalet: 5:25–5:35 /km');
+  assert.equal(paceText(events[1].s), 'Anbefalet: 5:40–5:50 /km');
+});
+
+test('ingen watt eller FTP i plantekster, faser eller zoner', () => {
+  const all = JSON.stringify({ PH, weeks: weeks.map(w => ({ note: w.note, days: w.days })) });
+  assert.ok(!/watt|ftp/i.test(all), all.match(/.{30}(watt|ftp).{30}/i)?.[0]);
+  assert.ok(all.includes('IM-fart') && all.includes('Cykeltest'));
 });

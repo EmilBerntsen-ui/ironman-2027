@@ -3,75 +3,77 @@ export const START = new Date(2026, 9, 26);
 export const RACE = new Date(2027, 7, 22);   // IRONMAN Copenhagen, søn. 22. aug. 2027
 export const TUNEUP = new Date(2027, 5, 13); // Køge Jernmand, søn. 13. jun. 2027
 
+// Zoner (se src/pace.js): easy/z2 = rolig, im = IM-fart (racefart), hm = halvmaratonfart, tempo, ss = sweet spot, thr = tærskel,
+// z4 = 10 km-fart, css = CSS (svøm). Hvert interval er [tekst, zone] (zone = hovedsættets zone); long/brick/lrun er [tekst, zone, hovedsætszone?].
 export const PH = {
   base1: {
     name: 'Grundform 1', span: 'okt–dec',
-    swim: ['8×100 m (20 s pause)', '10×100 m (20 s pause)', '6×200 m (30 s pause)'],
-    bike: ['3×8 min sweet spot (88–93 % FTP), 4 min pause', '3×10 min sweet spot', '3×12 min sweet spot'],
-    run: ['6×2 min Z4 / 2 min jog', '5×3 min Z4 / 2 min jog', '5×4 min Z4 / 2 min jog'],
-    long: 'Z2 hele vejen, kadence 85–95. Drik og spis lidt hver 20. min',
-    brick: 'Lige efter cyklen, roligt',
-    lrun: 'Z2, snakketempo. Gå gerne 1 min hver 10. min de første uger',
+    swim: [['8×100 m (20 s pause)', 'css'], ['10×100 m (20 s pause)', 'css'], ['6×200 m (30 s pause)', 'css']],
+    bike: [['3×8 min sweet spot, 4 min pause', 'ss'], ['3×10 min sweet spot', 'ss'], ['3×12 min sweet spot', 'ss']],
+    run: [['6×2 min Z4 / 2 min jog', 'z4'], ['5×3 min Z4 / 2 min jog', 'z4'], ['5×4 min Z4 / 2 min jog', 'z4']],
+    long: ['Z2 hele vejen, kadence 85–95. Drik og spis lidt hver 20. min', 'z2'],
+    brick: ['Lige efter cyklen, roligt', 'easy'],
+    lrun: ['Z2, snakketempo. Gå gerne 1 min hver 10. min de første uger', 'z2'],
     strTue: 'Tunge basisløft 3×6–8: squat, rumænsk dødløft, split squat, pull-ups, planke',
     strTueMin: 40,
     fri: ['Styrke (på arbejdet)', 'Let: step-ups, enbens-dødløft, sidelæns planke, hofteløft. Højst 30 min', 30],
   },
   base2: {
     name: 'Grundform 2', span: 'jan–feb',
-    swim: ['12×100 m i CSS-fart (15 s pause)', '5×200 m CSS (20 s pause)', '4×300 m (30 s pause)'],
-    bike: ['3×12 min sweet spot', '2×20 min sweet spot', '3×15 min sweet spot'],
-    run: ['6×4 min Z4 / 2 min jog', '4×6 min tærskel / 2 min jog', '3×8 min tærskel / 2 min jog'],
-    long: 'Z2, kadence 85–95. Ude når vejret tillader, ellers 2 t indendørs + resten ude',
-    brick: 'Lige efter cyklen, roligt',
-    lrun: 'Z2, snakketempo',
+    swim: [['12×100 m i CSS-fart (15 s pause)', 'css'], ['5×200 m CSS (20 s pause)', 'css'], ['4×300 m (30 s pause)', 'css']],
+    bike: [['3×12 min sweet spot', 'ss'], ['2×20 min sweet spot', 'ss'], ['3×15 min sweet spot', 'ss']],
+    run: [['6×4 min Z4 / 2 min jog', 'z4'], ['4×6 min tærskel / 2 min jog', 'thr'], ['3×8 min tærskel / 2 min jog', 'thr']],
+    long: ['Z2, kadence 85–95. Ude når vejret tillader, ellers 2 t indendørs + resten ude', 'z2'],
+    brick: ['Lige efter cyklen, roligt', 'easy'],
+    lrun: ['Z2, snakketempo', 'z2'],
     strTue: 'Basisløft 3×6–8: squat, rumænsk dødløft, split squat, pull-ups, planke',
     strTueMin: 40,
     fri: ['Styrke (på arbejdet)', 'Let: step-ups, enbens-dødløft, sidelæns planke, hofteløft. Højst 30 min', 30],
   },
   build1: {
     name: 'Opbygning 1', span: 'mar–apr',
-    swim: ['3×400 m (30 s pause)', '10×150 m CSS (20 s pause)', '2×600 m (45 s pause)'],
-    bike: ['4×8 min tærskel (95–100 % FTP), 4 min pause', '3×12 min tærskel', '2×20 min tærskel'],
-    run: ['3×10 min tærskel / 2 min jog', '2×15 min tærskel / 3 min jog', '5×1 km i 10 km-fart / 90 s jog'],
-    long: 'Z2 med 2×20 min IM-watt (65–75 % FTP). Spis 60–80 g kulhydrat i timen',
-    brick: 'Lige efter cyklen, første 10 min i IM-maratonfart',
-    lrun: 'Z2, sidste 15 min i IM-maratonfart',
+    swim: [['3×400 m (30 s pause)', 'css'], ['10×150 m CSS (20 s pause)', 'css'], ['2×600 m (45 s pause)', 'css']],
+    bike: [['4×8 min tærskel, 4 min pause', 'thr'], ['3×12 min tærskel', 'thr'], ['2×20 min tærskel', 'thr']],
+    run: [['3×10 min tærskel / 2 min jog', 'thr'], ['2×15 min tærskel / 3 min jog', 'thr'], ['5×1 km i 10 km-fart / 90 s jog', 'z4']],
+    long: ['Z2 med 2×20 min IM-fart. Spis 60–80 g kulhydrat i timen', 'z2', 'im'],
+    brick: ['Lige efter cyklen, første 10 min i IM-maratonfart', 'easy', 'im'],
+    lrun: ['Z2, sidste 15 min i IM-maratonfart', 'z2', 'im'],
     strTue: 'Vedligehold 2×6: squat, dødløft, step-ups, core',
     strTueMin: 30,
     fri: ['Hviledag', 'Fri. Eventuelt 15 min mobilitet', 0],
   },
   build2: {
     name: 'Opbygning 2', span: 'maj–jun',
-    swim: ['4×400 m (30 s pause)', '3×600 m (45 s pause)', '1500 m tempo, jævnt'],
-    bike: ['3×20 min sweet spot', '2×30 min IM-watt + 10 min tærskel', '4×10 min tærskel'],
-    run: ['3×12 min tærskel / 2 min jog', '40 min i halvmaratonfart', '2×20 min tærskel / 3 min jog'],
-    long: 'Z2 med 3×30 min IM-watt. Ét lige så spisested som på racedagen: 70–90 g kulhydrat i timen',
-    brick: 'Lige efter cyklen i IM-maratonfart',
-    lrun: 'Z2, sidste 25 min i IM-maratonfart',
+    swim: [['4×400 m (30 s pause)', 'css'], ['3×600 m (45 s pause)', 'css'], ['1500 m tempo, jævnt', 'im']],
+    bike: [['3×20 min sweet spot', 'ss'], ['2×30 min IM-fart + 10 min tærskel', 'im'], ['4×10 min tærskel', 'thr']],
+    run: [['3×12 min tærskel / 2 min jog', 'thr'], ['40 min i halvmaratonfart', 'hm'], ['2×20 min tærskel / 3 min jog', 'thr']],
+    long: ['Z2 med 3×30 min IM-fart. Ét lige så spisested som på racedagen: 70–90 g kulhydrat i timen', 'z2', 'im'],
+    brick: ['Lige efter cyklen i IM-maratonfart', 'im'],
+    lrun: ['Z2, sidste 25 min i IM-maratonfart', 'z2', 'im'],
     strTue: 'Vedligehold 2×6: squat, dødløft, core',
     strTueMin: 25,
     fri: ['Hviledag', 'Fri. Eventuelt 15 min mobilitet', 0],
   },
   peak: {
     name: 'Specifik fase', span: 'jul',
-    swim: ['3×800 m i racetempo (45 s pause)', '20×100 m CSS (10 s pause)', '2000 m sammenhængende i racetempo'],
-    bike: ['2×30 min sweet spot', '3×20 min lige over IM-watt', '60 min IM-watt i ét stræk'],
-    run: ['3×15 min tempo / 3 min jog', '50 min i IM-maratonfart', '6×5 min tærskel / 90 s jog'],
-    long: 'Z2 med 3×45 min IM-watt i aero. Fuld racedagsernæring: 80–90 g kulhydrat i timen, samme produkter som på dagen',
-    brick: 'Lige efter cyklen i IM-maratonfart',
-    lrun: 'Z2 med 2×20 min IM-maratonfart. Øv gel/drik undervejs',
+    swim: [['3×800 m i racetempo (45 s pause)', 'im'], ['20×100 m CSS (10 s pause)', 'css'], ['2000 m sammenhængende i racetempo', 'im']],
+    bike: [['2×30 min sweet spot', 'ss'], ['3×20 min lige over IM-fart', 'ss'], ['60 min IM-fart i ét stræk', 'im']],
+    run: [['3×15 min tempo / 3 min jog', 'tempo'], ['50 min i IM-maratonfart', 'im'], ['6×5 min tærskel / 90 s jog', 'thr']],
+    long: ['Z2 med 3×45 min IM-fart i aero. Fuld racedagsernæring: 80–90 g kulhydrat i timen, samme produkter som på dagen', 'z2', 'im'],
+    brick: ['Lige efter cyklen i IM-maratonfart', 'im'],
+    lrun: ['Z2 med 2×20 min IM-maratonfart. Øv gel/drik undervejs', 'z2', 'im'],
     strTue: 'Core og mobilitet',
     strTueMin: 20,
     fri: ['Hviledag', 'Fri. Eventuelt 15 min mobilitet', 0],
   },
   taper: {
     name: 'Nedtrapning', span: 'aug',
-    swim: ['6×200 m racetempo', '8×100 m racetempo', '4×100 m racetempo'],
-    bike: ['3×15 min IM-watt', '3×10 min IM-watt', '3×5 min IM-watt'],
-    run: ['3×10 min IM-maratonfart', '4×5 min IM-maratonfart', '4×3 min IM-maratonfart'],
-    long: 'Z2 med 2×30 min IM-watt. Racedagsernæring og racetøj',
-    brick: 'IM-maratonfart',
-    lrun: 'Z2, sidste 15 min i IM-maratonfart',
+    swim: [['6×200 m racetempo', 'im'], ['8×100 m racetempo', 'im'], ['4×100 m racetempo', 'im']],
+    bike: [['3×15 min IM-fart', 'im'], ['3×10 min IM-fart', 'im'], ['3×5 min IM-fart', 'im']],
+    run: [['3×10 min IM-maratonfart', 'im'], ['4×5 min IM-maratonfart', 'im'], ['4×3 min IM-maratonfart', 'im']],
+    long: ['Z2 med 2×30 min IM-fart. Racedagsernæring og racetøj', 'z2', 'im'],
+    brick: ['IM-maratonfart', 'im'],
+    lrun: ['Z2, sidste 15 min i IM-maratonfart', 'z2', 'im'],
     strTue: 'Core og mobilitet',
     strTueMin: 15,
     fri: ['Hviledag', 'Fri', 0],
@@ -128,13 +130,16 @@ export const WEEKS = [
 ];
 
 const swimMin = m => Math.round(m / 100 * 2.2 / 5) * 5;
+// Hvert pas bærer sin zone `z` (se src/pace.js), evt. `main` (hovedsættets zone), `ind` (cykel: true = indendørs, 'opt' = indendørs eller ude)
+// og `legs` (triatlon-løb: zone pr. gren). Zonerne er mærket her og aldrig udledt af teksten.
+const x = (main, ind) => ({ ...(main ? { main } : {}), ...(ind ? { ind } : {}) });
 const S = {
-  swim: (t, d, m) => ({ s: 'swim', t, d: d + ` · ${m.toLocaleString('da-DK')} m`, m: swimMin(m) }),
-  bike: (t, d, m) => ({ s: 'bike', t, d, m }),
-  run: (t, d, m) => ({ s: 'run', t, d, m }),
-  str: (t, d, m) => ({ s: 'str', t, d, m }),
-  rest: (t, d) => ({ s: 'rest', t, d, m: 0 }),
-  race: (t, d, m) => ({ s: 'race', t, d, m }),
+  swim: (t, d, m, z, o) => ({ s: 'swim', t, d: d + ` · ${m.toLocaleString('da-DK')} m`, m: swimMin(m), z, ...o }),
+  bike: (t, d, m, z, o) => ({ s: 'bike', t, d, m, z, ...o }),
+  run: (t, d, m, z, o) => ({ s: 'run', t, d, m, z, ...o }),
+  str: (t, d, m) => ({ s: 'str', t, d, m, z: 'str' }),
+  rest: (t, d) => ({ s: 'rest', t, d, m: 0, z: 'rest' }),
+  race: (t, d, m, z, o) => ({ s: 'race', t, d, m, z, ...o }),
 };
 
 const WINTER = ph => ph === 'base1' || ph === 'base2';
@@ -144,32 +149,36 @@ const spinWhere = ph => WINTER(ph) ? 'Spinneren på arbejdspladsen, frokost elle
 // tor din faste morgensvømning (intervaller) + roligt løb · fre spinner med intervaller · lør lang cykel · søn langt løb
 function buildDays(w, pos) {
   const p = w.p, ph = PH[w.ph], i = (pos - 1) % 3;
+  const [swT, swZ] = ph.swim[i], [bkT, bkZ] = ph.bike[i], [rnT, rnZ] = ph.run[i];
+  const [lgT, lgZ, lgM] = ph.long, [brT, brZ, brM] = ph.brick, [lrT, lrZ, lrM] = ph.lrun;
   const ow = w.ow ? ' Open water med våddragt, hvis vandet er over 15 °C, ellers i bassin.' : '';
+  const spin = WINTER(w.ph) ? true : 'opt'; // fredagens cykel: spinneren om vinteren, ellers ude eller spinneren
   const mon = WINTER(w.ph) || w.ph === 'taper'
     ? [S.rest('Hviledag', 'Fri efter weekenden. Eventuelt 15 min mobilitet')]
-    : [S.swim('Restitutionssvøm', 'Helt roligt, teknik og pull buoy. Spring over, hvis du er træt', 1500)];
-  const fri = [S.bike('Cykel med intervaller', `Z2 med ${ph.bike[i]}. ${spinWhere(w.ph)}`, p.bT)];
+    : [S.swim('Restitutionssvøm', 'Helt roligt, teknik og pull buoy. Spring over, hvis du er træt', 1500, 'easy')];
+  const fri = [S.bike('Cykel med intervaller', `Z2 med ${bkT}. ${spinWhere(w.ph)}`, p.bT, 'z2', x(bkZ, spin))];
   if (WINTER(w.ph)) fri.push(S.str('Styrke (på arbejdet)', 'Let i træningsrummet: step-ups, enbens-dødløft, sidelæns planke, hofteløft', 20));
   const days = [
     mon,
-    [S.run('Løbeintervaller', `15 min opvarmning · ${ph.run[i]} · resten nedløb`, p.rI),
+    [S.run('Løbeintervaller', `15 min opvarmning · ${rnT} · resten nedløb`, p.rI, 'easy', x(rnZ)),
      S.str('Styrke', ph.strTue, ph.strTueMin)],
-    [S.swim('Lang svømmetur', 'Sammenhængende i jævnt tempo, pull buoy på sidste tredjedel.' + ow, p.sl),
-     S.bike('Let cykeltur', 'Z1–Z2, høj kadence. cyklen på studiet eller ude', p.bW)],
-    [S.swim('Svømmeintervaller (morgen)', `Din faste torsdagssvømning: opv. 300 m · teknik 4×50 m · hovedsæt ${ph.swim[i]} · resten roligt`, p.si),
-     S.run('Roligt løb', 'Z2, snakketempo. Efter studiet', p.rE)],
+    [S.swim('Lang svømmetur', 'Sammenhængende i jævnt tempo, pull buoy på sidste tredjedel.' + ow, p.sl, 'easy'),
+     S.bike('Let cykeltur', 'Z1–Z2, høj kadence. cyklen på studiet eller ude', p.bW, 'easy', x(null, 'opt'))],
+    [S.swim('Svømmeintervaller (morgen)', `Din faste torsdagssvømning: opv. 300 m · teknik 4×50 m · hovedsæt ${swT} · resten roligt`, p.si, 'easy', x(swZ)),
+     S.run('Roligt løb', 'Z2, snakketempo. Efter studiet', p.rE, 'z2')],
     fri,
-    [S.bike('Lang cykeltur', ph.long, p.lr)],
+    [S.bike('Lang cykeltur', lgT, p.lr, lgZ, x(lgM, w.ph === 'base2' ? 'opt' : null))],
     [],
   ];
-  if (p.br) days[5].push(S.run('Brick-løb', ph.brick, p.br));
+  if (p.br) days[5].push(S.run('Brick-løb', brT, p.br, brZ, x(brM)));
   if (w.event) {
-    days[1] = [S.run('Løbeintervaller', '15 min opv. · 4×4 min i løbsfart · nedløb', 45), S.str('Styrke', ph.strTue, ph.strTueMin)];
-    days[4] = [S.bike('Rolig spinner', 'Z2 med 3×3 min sweet spot. ' + spinWhere(w.ph), 45)];
-    days[5] = [S.bike('Rolig cykeltur', 'Z1–Z2, 3 korte spurter. Gør klar til i morgen', p.lr)];
-    days[6] = [S.race(w.event[0], w.event[1], w.event[0] === 'Halvmaraton' ? 120 : 75)];
+    const half = w.event[0] === 'Halvmaraton';
+    days[1] = [S.run('Løbeintervaller', '15 min opv. · 4×4 min i løbsfart · nedløb', 45, 'easy', x(half ? 'hm' : 'z4')), S.str('Styrke', ph.strTue, ph.strTueMin)];
+    days[4] = [S.bike('Rolig spinner', 'Z2 med 3×3 min sweet spot. ' + spinWhere(w.ph), 45, 'z2', x('ss', spin))];
+    days[5] = [S.bike('Rolig cykeltur', 'Z1–Z2, 3 korte spurter. Gør klar til i morgen', p.lr, 'easy', x(null, WINTER(w.ph) ? 'opt' : null))];
+    days[6] = [S.race(w.event[0], w.event[1], half ? 120 : 75, half ? 'thr' : 'z4')];
   } else {
-    days[6] = [S.run('Langt løb', ph.lrun, p.ln)];
+    days[6] = [S.run('Langt løb', lrT, p.ln, lrZ, x(lrM))];
   }
   return days;
 }
@@ -179,67 +188,68 @@ function recDays(w) {
   const big = { base1: [1500, 75, 45], base2: [2000, 105, 55], build1: [2400, 135, 70], build2: [2600, 165, 75], peak: [2800, 210, 85] }[w.ph];
   return [
     [S.rest('Hviledag', 'Fri')],
-    [S.run('Løbetest', '15 min opv. · 30 min all-out alene · gennemsnitspuls sidste 20 min = tærskelpuls. Opdater løbezoner', 55),
+    [S.run('Løbetest', '15 min opv. · 30 min all-out alene · notér gennemsnitspace og gennemsnitspuls for de sidste 20 min (= tærskelfart og tærskelpuls)', 55, 'test'),
      S.str('Styrke, let', 'Halv vægt, kun teknik', 20)],
-    [S.swim('Rolig svømning', 'Teknik og roligt.' + ow, big[0])],
-    [S.swim('Svømmetest (morgen)', 'Opv. 400 m · 400 m all-out · 5 min pause · 200 m all-out · CSS = 200 / (tid400 − tid200) m/s. Opdater svømmezoner', 1600)],
-    [S.bike('FTP-test', 'Opv. 20 min med 3×1 min hårdt · 20 min all-out · FTP = 95 % af gennemsnitswatt. Brug samme cykel hver gang (spinneren, hvis den måler watt)', 60)],
-    [S.bike('Rolig lang tur', 'Z2 hele vejen', big[1])],
-    [S.run('Roligt løb', 'Z2', big[2])],
+    [S.swim('Rolig svømning', 'Teknik og roligt.' + ow, big[0], 'easy')],
+    [S.swim('Svømmetest (morgen)', 'Opv. 400 m · 400 m all-out · 5 min pause · 200 m all-out · CSS-fart pr. 100 m = (tid400 − tid200) / 2. Notér begge tider', 1600, 'test')],
+    [S.bike('Cykeltest', 'Opv. 20 min med 3×1 min hårdt · 20 min all-out, notér gennemsnitsfart og puls. Brug samme rute og samme cykel hver gang, helst i stille vejr', 60, 'test')],
+    [S.bike('Rolig lang tur', 'Z2 hele vejen', big[1], 'z2', x(null, WINTER(w.ph) ? 'opt' : null))],
+    [S.run('Roligt løb', 'Z2', big[2], 'z2')],
   ];
 }
 
 function examDays(w) {
+  const e = { run: 40, sl: 2000, si: 1500, bT: 60, lr: 105, ln: 60 };
   return [
     [S.rest('Hviledag', 'Fri')],
-    [S.run('Kort løb med fart', '10 min opv. · 5×2 min Z4 · nedløb', 40)],
-    [S.swim('Rolig svømning', 'Sammenhængende, roligt. Fin pause fra læsningen', 2000)],
-    [S.swim('Svømning (morgen)', 'Teknik + 6×100 m roligt-moderat', 1500)],
-    [S.bike('Spinner', 'Z2 med 2×10 min sweet spot. Spinneren på arbejdspladsen, eller cyklen på studiet tæt på læsepladsen', 60)],
-    [S.bike('Cykeltur', 'Z2. Kun hvis eksamen tillader det, ellers 45 min indendørs', 105)],
-    [S.run('Roligt løb', 'Z2', 60)],
+    [S.run('Kort løb med fart', '10 min opv. · 5×2 min Z4 · nedløb', e.run, 'easy', x('z4'))],
+    [S.swim('Rolig svømning', 'Sammenhængende, roligt. Fin pause fra læsningen', e.sl, 'easy')],
+    [S.swim('Svømning (morgen)', 'Teknik + 6×100 m roligt-moderat', e.si, 'easy')],
+    [S.bike('Spinner', 'Z2 med 2×10 min sweet spot. Spinneren på arbejdspladsen, eller cyklen på studiet tæt på læsepladsen', e.bT, 'z2', x('ss', true))],
+    [S.bike('Cykeltur', 'Z2. Kun hvis eksamen tillader det, ellers 45 min indendørs', e.lr, 'z2', x(null, 'opt'))],
+    [S.run('Roligt løb', 'Z2', e.ln, 'z2')],
   ];
 }
 
 function specialDays(w) {
   if (w.k === 'start') return [
     [S.rest('Hviledag', 'Fri')],
-    [S.run('Løbetest', '15 min opv. · 30 min hårdt men jævnt · gennemsnitspuls sidste 20 min = tærskelpuls', 55),
+    [S.run('Løbetest', '15 min opv. · 30 min hårdt men jævnt · notér gennemsnitspace og gennemsnitspuls for de sidste 20 min (= tærskelfart og tærskelpuls)', 55, 'test'),
      S.str('Styrke – introduktion', 'Find startvægte: squat, rumænsk dødløft, split squat, pull-ups, planke. 2×8, let', 35)],
-    [S.swim('Rolig svømning', 'Teknik og roligt', 1500),
-     S.bike('Let cykeltur', 'Z1–Z2', 40)],
-    [S.swim('Svømmetest (morgen)', 'Opv. 400 m · 400 m all-out · 5 min pause · 200 m all-out. Noter tiderne, så sætter du CSS-fart', 1400),
-     S.run('Roligt løb', 'Z2, snakketempo', 25)],
-    [S.bike('FTP-test', 'På spinneren på arbejdspladsen (hvis den måler watt), ellers på egen cykel med wattmåler. Opv. 20 min · 20 min all-out · FTP = 95 % af gennemsnitswatt', 60)],
-    [S.bike('Rolig tur', 'Z2', 90), S.run('Brick-løb', 'Lige efter cyklen, meget roligt', 10)],
-    [S.run('Roligt løb', 'Z2, snakketempo', 45)],
+    [S.swim('Rolig svømning', 'Teknik og roligt', 1500, 'easy'),
+     S.bike('Let cykeltur', 'Z1–Z2', 40, 'easy', x(null, 'opt'))],
+    [S.swim('Svømmetest (morgen)', 'Opv. 400 m · 400 m all-out · 5 min pause · 200 m all-out. Noter tiderne, så regnes CSS-farten ud: (tid400 − tid200) / 2 pr. 100 m', 1400, 'test'),
+     S.run('Roligt løb', 'Z2, snakketempo', 25, 'z2')],
+    [S.bike('Cykeltest', 'Opv. 20 min · 20 min all-out, notér gennemsnitsfart og puls. Brug en rute og en cykel, du kan gentage', 60, 'test')],
+    [S.bike('Rolig tur', 'Z2', 90, 'z2', x(null, 'opt')), S.run('Brick-løb', 'Lige efter cyklen, meget roligt', 10, 'easy')],
+    [S.run('Roligt løb', 'Z2, snakketempo', 45, 'z2')],
   ];
   if (w.k === 'race70') return [
-    [S.bike('Cykel', 'Z2 med 3×5 min racewatt', 60)],
-    [S.run('Kort løb', '10 min opv. · 4×3 min racefart · nedløb', 35)],
-    [S.swim('Rolig svømning', 'Open water i våddragt, hvis muligt', 1500)],
-    [S.swim('Svømning (morgen)', 'Opv. · 4×100 m i racetempo · roligt', 2000)],
+    [S.bike('Cykel', 'Z2 med 3×5 min racefart', 60, 'z2', x('ss'))],
+    [S.run('Kort løb', '10 min opv. · 4×3 min racefart · nedløb', 35, 'easy', x('hm'))],
+    [S.swim('Rolig svømning', 'Open water i våddragt, hvis muligt', 1500, 'easy')],
+    [S.swim('Svømning (morgen)', 'Opv. · 4×100 m i racetempo · roligt', 2000, 'easy', x('im'))],
     [S.rest('Hviledag', 'Pak taske. Tjek cyklen')],
-    [S.bike('Aktivering', '30 min rolig cykel med 3×1 min racewatt', 30), S.run('Aktivering', '3 strides', 15)],
-    [S.race('Køge Jernmand', 'Mellemdistance (DM): 1,9 km svøm · 90 km cykel · 21,1 km løb. Test ernæring, skift og pacing', 330)],
+    [S.bike('Aktivering', '30 min rolig cykel med 3×1 min racefart', 30, 'easy', x('ss')), S.run('Aktivering', '3 strides', 15, 'easy')],
+    [S.race('Køge Jernmand', 'Mellemdistance (DM): 1,9 km svøm · 90 km cykel · 21,1 km løb. Test ernæring, skift og pacing', 330, 'race', { legs: { swim: 'im', bike: 'ss', run: 'hm' } })],
   ];
   if (w.k === 'post70') return [
     [S.rest('Hviledag', 'Fri')],
-    [S.bike('Rolig cykel', 'Z1, ben ud', 45)],
-    [S.swim('Rolig svømning', 'Roligt', 1500)],
-    [S.run('Roligt løb', 'Z2, kun hvis benene er friske', 30)],
+    [S.bike('Rolig cykel', 'Z1, ben ud', 45, 'easy', x(null, 'opt'))],
+    [S.swim('Rolig svømning', 'Roligt', 1500, 'easy')],
+    [S.run('Roligt løb', 'Z2, kun hvis benene er friske', 30, 'z2')],
     [S.rest('Hviledag', 'Skriv 3 ting ned fra racet, som du vil gøre anderledes i august')],
-    [S.bike('Lang tur', 'Z2', 150)],
-    [S.run('Roligt løb', 'Z2', 60)],
+    [S.bike('Lang tur', 'Z2', 150, 'z2')],
+    [S.run('Roligt løb', 'Z2', 60, 'z2')],
   ];
   if (w.k === 'race') return [
-    [S.bike('Cykel', 'Z2 med 3×5 min IM-watt', 60)],
-    [S.run('Kort løb', '20 min roligt med 4 strides', 20)],
-    [S.swim('Open water', 'I racevåddragten, gerne på racebanen', 1200)],
-    [S.swim('Svømning (morgen)', 'Opv. · 4×100 m racetempo · roligt', 1500), S.bike('Kort cykel', '30 min rolig, tjek gear og bremser', 30)],
+    [S.bike('Cykel', 'Z2 med 3×5 min IM-fart', 60, 'z2', x('im'))],
+    [S.run('Kort løb', '20 min roligt med 4 strides', 20, 'easy')],
+    [S.swim('Open water', 'I racevåddragten, gerne på racebanen', 1200, 'easy')],
+    [S.swim('Svømning (morgen)', 'Opv. · 4×100 m racetempo · roligt', 1500, 'easy', x('im')), S.bike('Kort cykel', '30 min rolig, tjek gear og bremser', 30, 'easy')],
     [S.rest('Hviledag', 'Check-in, race briefing. Kulhydratrig mad')],
-    [S.swim('Aktivering', '15 min rolig svømning', 600), S.bike('Aktivering', '30 min med 3×1 min IM-watt. Aflever cyklen i skifteområdet', 30)],
-    [S.race('IRONMAN', '3,8 km svøm · 180 km cykel · 42,2 km løb', 720)],
+    [S.swim('Aktivering', '15 min rolig svømning', 600, 'easy'), S.bike('Aktivering', '30 min med 3×1 min IM-fart. Aflever cyklen i skifteområdet', 30, 'easy', x('im'))],
+    [S.race('IRONMAN', '3,8 km svøm · 180 km cykel · 42,2 km løb', 720, 'race', { legs: { swim: 'im', bike: 'im', run: 'im' } })],
   ];
 }
 
@@ -253,7 +263,7 @@ export function plan() {
       pos = 0;
       days = w.k === 'rec' ? recDays(w) : w.k === 'exam' ? (w.test ? recDays(w) : examDays(w)) : specialDays(w);
     }
-    if (w.k === 'exam' && w.test) days = days.map((d, i) => i === 5 ? [S.bike('Rolig tur', 'Z2', 90)] : i === 6 ? [S.run('Roligt løb', 'Z2', 60)] : d);
+    if (w.k === 'exam' && w.test) days = days.map((d, i) => i === 5 ? [S.bike('Rolig tur', 'Z2', 90, 'z2')] : i === 6 ? [S.run('Roligt løb', 'Z2', 60, 'z2')] : d);
     const min = { swim: 0, bike: 0, run: 0, str: 0, race: 0 };
     days.flat().forEach(s => { if (s.s in min) min[s.s] += s.m; });
     const total = Object.values(min).reduce((a, b) => a + b, 0);

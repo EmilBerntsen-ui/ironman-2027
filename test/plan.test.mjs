@@ -54,6 +54,13 @@ test('ugentlige timer ligger mellem 4 og 17', () => {
   }
 });
 
+test('uge 20–43 er uændrede: minutter og antal pas pr. uge', () => {
+  const minutes = [745, 775, 805, 430, 805, 835, 590, 430, 845, 875, 345, 375, 900, 550, 320, 900, 890, 915, 525, 915, 900, 660, 500, 935];
+  const counts = [11, 11, 11, 7, 11, 11, 10, 7, 11, 11, 6, 7, 11, 7, 5, 11, 11, 11, 7, 11, 11, 10, 10, 8];
+  assert.deepEqual(weeks.slice(19).map(w => w.total), minutes);
+  assert.deepEqual(weeks.slice(19).map(w => w.days.flat().filter(s => s.s !== 'rest').length), counts);
+});
+
 test('.ics: én VEVENT pr. pas, CRLF, foldet ≤ 75 oktetter, stabile UID', () => {
   const ics = buildIcs(weeks, new Date('2026-10-22T12:00:00Z'));
   const n = sessions.filter(x => x.s.s !== 'rest').length;
