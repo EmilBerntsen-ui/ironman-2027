@@ -23,6 +23,7 @@ Projektet har ingen afhængigheder – kun Node (v20+). Arkitekturen er beskreve
 | `src/nutrition.js` | Kost: dagtyper, kulhydrat pr. kg, energi (estimat), før/under/efter pr. pas, vægt (kun lokalt) og kostguiden som data. Ren logik, bruges i Node og i browseren. |
 | `src/app.html`, `src/app.js`, `src/styles.css`, `src/views.css` | Siden: fem faner med en menu i bunden (I dag, Kalender, Kost, Analyse, Mere), detaljevisning med log, præstationsgraf og guides. |
 | `src/views.js` | Rene hjælpefunktioner til fanerne: routing (`#idag`, `#kalender`, `#kost`, `#analyse`, `#mere`, `#u12`), nøglepas, overholdelse pr. sport og stat-kort. Bruges i Node og i browseren. |
+| `src/advice.js` | Plan-råd: tommelfingerregler ud fra planen, logs og den faktiske PMC. Ren logik, bruges i Node og i browseren. |
 | `src/ics.js` | Kalendereksport (RFC 5545). |
 | `build.mjs`, `build/` | Byggescript og mål: `artifact` (claude.ai) og `site` (GitHub Pages). |
 | `scripts/` | Hent fremdrift til kalenderen (CI), opret Gist'en fra terminalen og Strava-synk (`strava-sync.mjs` i CI, `strava-auth.mjs` til engangsgodkendelsen, fælles kode i `scripts/lib/`). |
@@ -50,7 +51,9 @@ Bemærk: Importerer du filen igen efter ændringer i planen, kan nogle apps lave
 
 ## Siden
 
-Siden har fem faner med en menu i bunden (på brede skærme i venstre side): **I dag** (dagens pas med anbefalet fart, kost og log, Fitness/Form/Træthed, ugens fremdrift og næste nøglepas), **Kalender**, **Kost** (dagens og ugens mål samt guiden), **Analyse** (præstationsgraf, timer pr. uge og overholdelse pr. sport) og **Mere** (synk, vægt, eksport/import, zoner, regler og version). Adresserne er `#idag`, `#kalender`, `#kost`, `#analyse` og `#mere`, og `#u12` åbner kalenderen ved uge 12. Se [arkitekturen](docs/architecture.md) §2.4.
+Siden har fem faner med en menu i bunden (på brede skærme i venstre side): **I dag** (dagens pas med anbefalet fart, kost og log, **+ Tilføj træning**, plan-råd, Fitness/Form/Træthed, ugens fremdrift og næste nøglepas), **Kalender**, **Kost** (dagens og ugens mål samt guiden), **Analyse** (præstationsgraf, timer pr. uge og overholdelse pr. sport) og **Mere** (synk, vægt, eksport/import, zoner, regler og version). Adresserne er `#idag`, `#kalender`, `#kost`, `#analyse` og `#mere`, og `#u12` åbner kalenderen ved uge 12. Se [arkitekturen](docs/architecture.md) §2.4.
+
+Træning der ikke står i planen kan tilføjes med **+ Tilføj træning** på I dag (eller kommer fra Strava). Den vises som et stiplet *Ekstra*-kort, tæller i ugens timer, i overholdelsen (som *+ ekstra*) og i belastningen (TSS ud fra minutter og RPE), men ikke i planens pas og ikke i kalenderen (.ics). **Plan-råd** på I dag er tommelfingerregler ud fra dine logs (sprunget over, hård belastning, lav form, mere end planen, rolig dag efter mange dage i træk); de viser tallene bag, kan skjules for i dag, og planen ændrer sig aldrig. Se [arkitekturen](docs/architecture.md) §3.10 og §3.11.
 
 `dist/artifact/index.html` er bygget til at blive vist som et claude.ai-Artifact. Den gemmer afkrydsninger, faktisk tid, faktisk pace, RPE og noter i Artifact-databasen (samling `progress`, ét dokument pr. uge `u01`…`u43`), så du kan se dem fra både telefon og computer. Åbnes filen uden for claude.ai, gemmes det kun i den browser (localStorage).
 

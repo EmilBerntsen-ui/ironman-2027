@@ -21,6 +21,7 @@ Assumed repo and URL: `github.com/EmilBerntsen-ui/ironman-2027` (public), served
 | ICS | `✅` for done sessions and nothing else: sessions that are not done, past or future, are unchanged (no mark for missed sessions). The marks need `GIST_ID` and `GIST_READ_TOKEN`. Only `done` and `min` are read. Served at the secret path `cal/<CAL_TOKEN>/ironman-2027.ics` |
 | Strava | The Action imports activities and writes `src:"strava"` entries into the gist, so sessions show as done without ticking. Spec in [strava.md](strava.md): personal API app, rotated refresh token stored encrypted in the gist (`_strava.json`), scope `activity:read` (`--read-all` for `activity:read_all`), a manual tick always wins. Only `dist`/`hr` are new fields, and the `.ics` ignores them |
 | Pace | Every planned session carries an explicit zone (`z`, optional `main`, `ind`, `legs`) in `plan.js`; nothing is parsed from the text. `src/pace.js` derives recommended pace ranges from three baselines (run threshold 5:45 /km, swim CSS 2:10 /100 m, bike threshold 29 km/h), shown in the sheet, on the cards, in the zone guide and in each `.ics` description. The log has an optional actual `pace` (§3.1). Bike is km/h only, and indoor sessions say "efter følelse og kadence". Details in §3.8 |
+| Advice | `src/advice.js` (pure) turns the plan, the logs (sessions and extras) and the actual PMC into at most two rules-of-thumb cards on I dag (`#advice`), most severe first, each with its numbers and a "skjul i dag" button (per date in `localStorage`). The plan never changes. Details in §3.11 |
 | Nutrition | `src/nutrition.js` (pure, no DOM) derives a day type from the day's planned sessions and shows carbohydrate per kg, an energy **estimate** and before/during/after fueling per session. Numbers come only from [research/ernaering-kilder.md](research/ernaering-kilder.md). The user's weight is personal: kept only in `localStorage` under `im2027-weight-kg`, never in a Store, the gist, an export or the `.ics`. Chips on every day, a weekly average, a `Kost` block in the sheet and a `Kost` guide. Details in §3.9 |
 | PWA | The whole shell is precached and served cache-first, versioned by content hash. The SW ignores `/cal/` and cross-origin requests. An update toast prompts the reload |
 
@@ -42,6 +43,7 @@ src/shell.site.html         NEW  full document: doctype, CSP, manifest, icons
 src/app.js                  uses a Store
 src/styles.css              frozen during phase 2
 src/views.js / .css         NEW  tabs (§2.4): pure helpers (routing, key sessions, compliance, stat cards) and the tab bar, top bar and view styles
+src/advice.js               NEW  plan-adjustment advice (§3.11): pure rules over the plan, the logs and the PMC
 src/settings.js / .css      NEW  sync UI: connect, status, weight, export/import. A dialog, or inline in the Mere tab (`container`)
 src/store/local.js          NEW  LocalStore, deviceId
 src/store/artifact-db.js    NEW  ArtifactDbStore
@@ -82,12 +84,12 @@ export const TARGETS = {
   artifact: {
     shell: 'src/shell.artifact.html',
     css: ['src/styles.css', 'src/views.css', 'src/settings.css'],
-    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'],
+    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/advice.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'],
   },
   site: {
     shell: 'src/shell.site.html',
     css: ['src/fonts.css', 'src/styles.css', 'src/views.css', 'src/settings.css', 'src/pwa.css'],
-    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/store/local.js', 'src/store/gist.js', 'src/settings.js', 'src/app.js', 'src/pwa.js'],
+    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/nutrition.js', 'src/views.js', 'src/advice.js', 'src/store/local.js', 'src/store/gist.js', 'src/settings.js', 'src/app.js', 'src/pwa.js'],
   },
 };
 export function bundleJs(files, { target, version }) /* → string */;
@@ -512,6 +514,20 @@ Guide. `kostGuide(weight)` returns the guide as data (day table, before/during/a
   - the actual PMC adds `extraTss(e)` on the extra's day: `min × IF² × 100/60`, with IF by RPE (≤ 3: 0.65, 4–6: 0.75, 7–8: 0.85, 9–10: 0.9, no RPE: 0.7), and strength fixed like `tss()` (20/25/30);
   - the nutrition day chip, the Kost tab and the weekly kcal average use the planned minutes of the day plus the extras' minutes (an extra is treated as a pseudo-session of its sport, so the day type can rise);
   - the planned PMC, the planned TSS and the `.ics` never see extras. `scripts/fetch-progress.mjs` strips `x-` keys (`sessionsOnly`), so the CI progress file has none, and `buildIcs` only ever reads `${di}-${si}` keys (both tested).
+
+### 3.11 Plan-adjustment advice (rules of thumb)
+
+`adviceFor({ weeks, progress, todayIdx, actualPmc, plannedPmc, dismissed = [], limit = 2 })` in `src/advice.js` returns `[{ level: 'info'|'warn'|'stop', title, text, rule, reason }]`, most severe first (stop, warn, info; ties in the order form, rpe, missed, volume, easy), at most `limit`. `rule` is the id of the rule (`missed`, `rpe`, `form-warn`, `form-stop`, `volume`, `easy`) and is the key for dismissing a card; `reason` is the sentence with the numbers. `dismissed` ids are removed before the limit is applied, so the next rule takes the free place. Outside the plan, or with bad arguments, the result is `[]`. The function is pure: it never touches the plan or the progress, and the plan itself never changes.
+
+| Rule | Fires when | Card |
+|---|---|---|
+| `missed` (info) | at least 2 planned (non-rest) sessions without a done entry in the 7 whole days before today (today is not over). Needs at least one log somewhere, because "missed" means nothing when the log is not used (or has not been fetched yet). With 3 or more including a long session (`bike`/`run` whose title has "lang"): move the latest missed long session to the next free day later in this week (a day with only rest), else skip it | Fortsæt planen – indhent ikke |
+| `rpe` (warn) | two logs (sessions or extras) with RPE ≥ 9 in the last 4 days (today and the 3 before), or the last 3 or more easy sessions in a row (zone `easy`/`z2` without a main set, in plan order; a pending session today waits) all logged with RPE ≥ 7, the newest within 7 days. A missed or RPE-less easy session breaks the row | Gør dagens intervaller rolige (Z2) eller tag en ekstra hviledag |
+| `form-warn` / `form-stop` | actual TSB (the pre-today value from the actual PMC) < −25 (warn) or < −35 (stop), only with logs on at least 10 different days. The reason also shows the planned TSB | Høj træthed: gør dagens hårde pas roligt / Tag hviledag i dag |
+| `volume` (info) | logged minutes (the written minutes, else the planned, plus extras) > planned × 1.2 over today and the 6 days before, with at least 120 planned minutes in that window | Du træner mere end planen – hold de rolige pas rolige |
+| `easy` (info) | today is an easy day or a rest day (only rest, strength and easy sessions, no long ride or run) and each of the 3 days before has at least one log (session or extra) | Rolig dag i dag – hold den rolig / Hviledag i dag – brug den |
+
+UI (`paintAdvice` in `src/app.js`, called from `paintToday`). `#advice` gets a heading, up to two `<article class="adv adv-<level>" data-advice="<rule>">` cards (level word, "Tommelfingerregel", title, text, the reason in mono type, a "Skjul i dag" button) and the line "Tommelfingerregler ud fra dine logs, ikke individuel rådgivning. Planen ændrer sig ikke." The button stores the rule id in `localStorage['im2027-advice-dismissed-YYYY-MM-DD']` (a JSON array) and repaints; keys of other dates are removed at the same time. Every access is wrapped in try/catch, and with blocked storage a per-session map in memory takes over. A new day shows the cards again, because the key is per date. Tests: `test/advice.test.mjs`.
 
 ---
 
