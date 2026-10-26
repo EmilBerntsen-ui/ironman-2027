@@ -177,11 +177,11 @@ test('I dag tegnes om ved ny vægt, ved dagsskifte og når en anden Store giver 
   assert.match(app.$('weekProgress').innerHTML, /uge 2/);
 });
 
-test('monteringspunkterne er stadig tomme efter tegning, og både #advice og #addWorkout ligger i I dag', () => {
+test('"+ Tilføj træning" består af én knap efter hver tegning, og #advice er tom uden logs', () => {
   const app = loadApp({ now: SAT });
   check(app, 'u02-5-0');
   assert.equal(app.$('advice').innerHTML, '');
-  assert.equal(app.$('addWorkout').innerHTML, '');
+  assert.match(app.$('addWorkout').innerHTML, /^<button type="button" class="btn add-btn" data-add>\+ Tilføj træning<\/button>$/);
 });
 
 test('hele I dag bliver ved med at virke i Artifact-bygningen', () => {

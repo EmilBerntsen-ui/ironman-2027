@@ -204,15 +204,16 @@ test('Kalender og Kost har deres eksisterende indhold: ugegitter, dagsliste, kos
   assert.match(app.$('kostGuide').innerHTML, /Dag for dag/);
 });
 
-test('monteringspunkter til næste opgave: #advice og #addWorkout findes på I dag og er tomme', () => {
+test('monteringspunkter: #advice og #addWorkout ligger i I dag; tomme uden indhold, og "+ Tilføj træning" tegnes kun inden for planen', () => {
   assert.ok(SRC_HTML.includes('<section id="advice"></section>'));
   assert.ok(SRC_HTML.includes('<div id="addWorkout"></div>'));
   const idag = SRC_HTML.slice(SRC_HTML.indexOf('<section class="view" id="idag"'), SRC_HTML.indexOf('<section class="view" id="kalender"'));
   assert.ok(idag.includes('id="advice"') && idag.includes('id="addWorkout"'), 'begge ligger i I dag');
   assert.match(VIEWS_CSS, /#advice:empty, #addWorkout:empty \{ display: none; \}/, 'tomme punkter fylder ikke');
   const app = loadApp();
-  assert.equal(app.$('advice').innerHTML, '');
-  assert.equal(app.$('addWorkout').innerHTML, '');
+  assert.equal(app.$('advice').innerHTML, '', 'ingen råd uden logs');
+  assert.equal(app.$('addWorkout').innerHTML, '<button type="button" class="btn add-btn" data-add>+ Tilføj træning</button>');
+  for (const now of ['2026-10-20T10:00:00', '2027-09-01T10:00:00']) assert.equal(loadApp({ now }).$('addWorkout').innerHTML, '', `uden for planen (${now}): ingen knap`);
 });
 
 test('overholdelsen i kalenderen er uændret: afkrydsning farver kortet og tæller i headeren', () => {

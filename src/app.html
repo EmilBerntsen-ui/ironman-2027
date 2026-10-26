@@ -33,7 +33,7 @@
       <div class="today-main">
         <div class="th" id="todayHead"></div>
         <div class="today-list" id="todaySessions"></div>
-        <!-- Monteringspunkter til næste opgave: "+ Tilføj træning" og plan-justering. Tomme med vilje: app.js tegner intet i dem endnu. -->
+        <!-- Monteringspunkter, tegnet af app.js (paintToday): "+ Tilføj træning" (ekstra træning) og plan-justering (tommelfingerregler). Tomme, mens der intet er at vise. -->
         <div id="addWorkout"></div>
         <section id="advice"></section>
       </div>
@@ -57,7 +57,7 @@
     </div>
     <div class="legend">
       <span style="--c: var(--swim)">Svøm</span><span style="--c: var(--bike)">Cykel</span><span style="--c: var(--run)">Løb</span><span style="--c: var(--str)">Styrke</span><span style="--c: var(--race)">Konkurrence</span>
-      <span style="--c: var(--ok)">Gennemført</span><span style="--c: var(--warn)">Varighed &gt;20 % skævt</span><span style="--c: var(--miss)">Ikke gennemført</span>
+      <span class="lg-ex">Ekstra (uplanlagt)</span><span style="--c: var(--ok)">Gennemført</span><span style="--c: var(--warn)">Varighed &gt;20 % skævt</span><span style="--c: var(--miss)">Ikke gennemført</span>
     </div>
     <p class="perf-cap kost-cap" id="kostCap">Under hver dag: dagtype · energi (estimat) · kulhydrat. Se guiden Kost.</p>
     <div class="gscroll" id="grid"></div>
@@ -87,7 +87,7 @@
       <div id="bars"></div>
       <div class="tip" id="tip"></div>
     </div>
-    <p class="perf-cap">Planlagt belastning ud fra estimeret TSS (minutter × intensitet² × 100/60). Start-CTL er antaget 25. Den grønne linje regnes ud fra dine afkrydsede pas (faktiske minutter, hvis du har skrevet dem). Klik på en søjle for at hoppe til ugen.</p>
+    <p class="perf-cap">Planlagt belastning ud fra estimeret TSS (minutter × intensitet² × 100/60). Start-CTL er antaget 25. Den grønne linje regnes ud fra dine afkrydsede pas (faktiske minutter, hvis du har skrevet dem) og din ekstra træning (TSS ud fra minutter og RPE). Klik på en søjle for at hoppe til ugen.</p>
     <div class="sec-head">
       <h2 id="compTitle">Overholdelse</h2>
     </div>

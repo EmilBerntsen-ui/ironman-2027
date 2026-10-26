@@ -39,6 +39,29 @@ body { padding-left: var(--rail); }
 
 /* Tomme monteringspunkter (plan-justering og "+ Tilføj træning") fylder ikke noget, før noget tegnes i dem */
 #advice:empty, #addWorkout:empty { display: none; }
+.c-other { --c: var(--muted); }
+
+/* ---- Ekstra træning: stiplede kort, "+ Tilføj træning" og formularen ---- */
+.card.ex { border-style: dashed; border-left-style: solid; background: transparent; }
+.card.ex .xtag { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--c); }
+.agenda .card.ex .xtag { font-size: 11px; }
+.legend .lg-ex::before { background: transparent; border: 1px dashed var(--muted); }
+.tc.ex { background: transparent; border-style: dashed; border-left-style: solid; }
+.tc.ex .tc-state { background: transparent; border: 1px dashed var(--muted); }
+.gsum .row.ex { color: var(--muted); }
+.ex-note { display: block; color: var(--muted); font-size: 11.5px; font-weight: 400; }
+#addWorkout { display: flex; flex-direction: column; gap: 8px; }
+.add-btn { align-self: flex-start; min-height: 44px; padding: 8px 16px; border-style: dashed; }
+.add-note { margin: 0; font-size: 13px; color: var(--ok); }
+.xform { gap: 12px; }
+.xform h3, .xform .x-hint { margin: 0; }
+.x-hint { color: var(--muted); font-size: 13px; }
+.xform .sh-actions, .sh .sh-actions { flex-wrap: wrap; align-items: center; }
+.xform .msg { font-size: 13px; color: var(--miss); min-height: 1em; }
+.field select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; font-size: 16px; width: 100%; min-height: 44px; }
+.field input[type="date"], .field input[type="number"], .field input[type="text"] { min-height: 44px; }
+.btn.danger { color: var(--miss); border-color: color-mix(in srgb, var(--miss) 45%, var(--line)); margin-right: auto; }
+.x-confirm { flex: 1 1 100%; font-size: 14px; color: var(--ink); }
 
 /* ---- I dag ---- */
 .today-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }

@@ -39,9 +39,11 @@ export const SPORT_ORDER = Object.freeze(['swim', 'bike', 'run', 'str', 'race'])
 
 // Planlagt = pas på dage før i dag. Gennemført = gennemførte pas til og med i dag. Et pas der er gennemført i dag tæller også som planlagt,
 // så en dag der kun er halvt overstået ikke trækker procenten ned. Fremtidige pas tæller ikke. Minutter: det du har skrevet, ellers det planlagte.
-// entryOf(wi, di, si) → gennemført post eller null. → { rows: [{ sport, n, nDone, min, minDone }] (kun sportsgrene med planlagte pas), total }.
-export function complianceBySport(weeks, todayIdx, entryOf) {
-  const zero = sport => ({ sport, n: 0, nDone: 0, min: 0, minDone: 0 });
+// entryOf(wi, di, si) → gennemført post eller null. extras: [{ dayIdx, sport, min }] (ekstra træning, se progress.js liveExtras) til og med i dag;
+// de lægges i `extra` (minutter) pr. sport og rører hverken pas, planlagte minutter eller procenten. En sport uden planlagte pas (fx 'other') får en række,
+// hvis den har ekstra (ukendt sport tæller som 'other'). → { rows: [{ sport, n, nDone, min, minDone, extra }] (sportsgrene med planlagte pas eller ekstra), total }.
+export function complianceBySport(weeks, todayIdx, entryOf, extras = []) {
+  const zero = sport => ({ sport, n: 0, nDone: 0, min: 0, minDone: 0, extra: 0 });
   const by = Object.fromEntries(SPORT_ORDER.map(s => [s, zero(s)]));
   weeks.forEach((w, wi) => w.days.forEach((day, di) => {
     const d = wi * 7 + di;
@@ -53,8 +55,13 @@ export function complianceBySport(weeks, todayIdx, entryOf) {
       if (d < todayIdx || e) { r.n++; r.min += s.m; }
     });
   }));
-  const rows = SPORT_ORDER.map(s => by[s]).filter(r => r.n > 0);
-  const total = rows.reduce((a, r) => ({ sport: 'all', n: a.n + r.n, nDone: a.nDone + r.nDone, min: a.min + r.min, minDone: a.minDone + r.minDone }), zero('all'));
+  for (const x of extras || []) {
+    if (!x || !(x.dayIdx <= todayIdx) || !(x.min > 0) || typeof x.sport !== 'string') continue;
+    const sport = SPORT_ORDER.includes(x.sport) ? x.sport : 'other'; // ukendt sport = andet
+    (by[sport] ??= zero(sport)).extra += x.min;
+  }
+  const rows = [...SPORT_ORDER, 'other'].map(s => by[s]).filter(r => r && (r.n > 0 || r.extra > 0));
+  const total = rows.reduce((a, r) => ({ sport: 'all', n: a.n + r.n, nDone: a.nDone + r.nDone, min: a.min + r.min, minDone: a.minDone + r.minDone, extra: a.extra + r.extra }), zero('all'));
   return { rows, total };
 }
 // Andel 0–100 (hele procent), eller null uden planlagt.

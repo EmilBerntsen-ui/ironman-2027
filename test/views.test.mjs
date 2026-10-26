@@ -62,7 +62,7 @@ test('complianceBySport: planlagt = pas før i dag, gennemført = til og med i d
   const entryOf = (wi, di, si) => entries.get(`${wi}-${di}-${si}`) || null;
   const total = c => c.rows.reduce((a, r) => a + r.n, 0);
   // før planstart: intet planlagt
-  assert.deepEqual(complianceBySport(weeks, -3, entryOf), { rows: [], total: { sport: 'all', n: 0, nDone: 0, min: 0, minDone: 0 } });
+  assert.deepEqual(complianceBySport(weeks, -3, entryOf), { rows: [], total: { sport: 'all', n: 0, nDone: 0, min: 0, minDone: 0, extra: 0 } });
   // mandag i uge 1 (dag 0) er en hviledag: intet planlagt endnu, heller ikke i dag
   assert.equal(complianceBySport(weeks, 0, entryOf).total.n, 0);
   // slutningen af uge 2: alt før i dag planlagt, intet gennemført
@@ -95,6 +95,30 @@ test('complianceBySport: planlagt = pas før i dag, gennemført = til og med i d
   // gennemført i fremtiden tæller ikke
   entries.set('5-0-0', { done: true });
   assert.equal(complianceBySport(weeks, 8, entryOf).total.nDone, 2);
+});
+
+test('complianceBySport med ekstra: minutter pr. sport til og med i dag, uden at røre planlagt, gennemført eller procenten; other får sin egen række', () => {
+  const none = () => null;
+  const base = complianceBySport(weeks, 13, none);
+  const x = (dayIdx, sport, min) => ({ dayIdx, sport, min });
+  const c = complianceBySport(weeks, 13, none, [x(3, 'run', 40), x(13, 'run', 20), x(14, 'run', 99), x(5, 'bike', 60), x(2, 'other', 45), x(4, 'str', 0)]);
+  const row = sp => c.rows.find(r => r.sport === sp);
+  assert.equal(row('run').extra, 60, 'til og med i dag (dag 13), ikke i morgen');
+  assert.equal(row('bike').extra, 60);
+  assert.equal(row('swim').extra, 0);
+  assert.deepEqual(row('other'), { sport: 'other', n: 0, nDone: 0, min: 0, minDone: 0, extra: 45 });
+  assert.equal(c.rows.at(-1).sport, 'other', 'other kommer sidst');
+  assert.equal(c.total.extra, 165);
+  for (const r of base.rows) assert.deepEqual({ ...row(r.sport), extra: 0 }, r, `planlagt og gennemført er uændret for ${r.sport}`);
+  assert.deepEqual({ ...c.total, extra: 0 }, base.total);
+  assert.deepEqual(complianceBySport(weeks, 13, none, []), base);
+  assert.deepEqual(complianceBySport(weeks, 13, none, undefined), base);
+  // en sport uden planlagte pas endnu (før planstart) får en række, hvis den har ekstra
+  assert.deepEqual(complianceBySport(weeks, 0, none, [x(0, 'swim', 30)]).rows, [{ sport: 'swim', n: 0, nDone: 0, min: 0, minDone: 0, extra: 30 }]);
+  // ugyldige poster ignoreres; en ukendt sport (også et prototypenavn) tæller som other
+  const odd = complianceBySport(weeks, 13, none, [null, x(1, 'toString', 5), x(1, 7, 5), x(NaN, 'run', 5), x(1, 'run', -5), x(1, 'run', 'x')]);
+  assert.deepEqual(odd.rows.map(r => r.sport), base.rows.map(r => r.sport).concat(['other']));
+  assert.equal(odd.total.extra, 5);
 });
 
 test('pct: hele procent, og null uden planlagt', () => {

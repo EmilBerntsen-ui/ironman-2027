@@ -224,10 +224,10 @@ The page is five views in one `<main>`, with a fixed tab bar. Both targets get t
 
 | Tab | Hash and view id | Content |
 |---|---|---|
-| I dag (default) | `#idag` | Race-bib header (countdown, Køge countdown, overall progress), today's sessions as cards (recommended pace, Kost before/during/after, `Log pas` button that opens the existing sheet, quick check), today's Kost chip, Fitness (CTL), Form (TSB) and Træthed (ATL) cards with a sparkline each, this week's hours and sessions, next key session, and the two empty mount points `#addWorkout` and `#advice` |
-| Kalender | `#kalender` | The week grid (desktop) or agenda with prev/next/swipe (phone), unchanged |
+| I dag (default) | `#idag` | Race-bib header (countdown, Køge countdown, overall progress), today's sessions as cards (recommended pace, Kost before/during/after, `Log pas` button that opens the existing sheet, quick check), today's extras, today's Kost chip, Fitness (CTL), Form (TSB) and Træthed (ATL) cards with a sparkline each, this week's hours and sessions, next key session, the `+ Tilføj træning` button (`#addWorkout`) and the plan-adjustment advice (`#advice`) |
+| Kalender | `#kalender` | The week grid (desktop) or agenda with prev/next/swipe (phone). Extras are dashed `Ekstra` cards after the planned cards of their day |
 | Kost | `#kost` | Today's and this week's targets (kcal, carbohydrate, protein; grams with a weight, otherwise g/kg and "Angiv vægt"), then the Kost guide |
-| Analyse | `#analyse` | PMC chart, hours per week, and a compliance table per sport (sessions and minutes done against planned so far) |
+| Analyse | `#analyse` | PMC chart, hours per week, and a compliance table per sport (sessions and minutes done against planned so far, extra minutes as `+ ekstra`) |
 | Mere | `#mere` | Settings inline (GitHub sync, weight, export/import), calendar-subscription help (never the secret URL), zones, rules, schedule, about and version |
 
 Routing (`parseRoute` in `views.js`, `applyRoute` and `navigate` in `app.js`). Plain hash tokens only: `#idag`, `#kalender`, `#kost`, `#analyse`, `#mere`. The token `settings` is reserved by the claude.ai viewer and is never used. The tab bar links are ordinary `<a href="#…">`, so the back button works without extra code. A week link `#u12` opens Kalender at week 12; an empty or unknown hash shows I dag. `applyRoute()` is idempotent and runs on `hashchange` and at start. `navigate(name)` sets the hash and applies the route at once (the Analyse bars, the status buttons, ⚙ and "Angiv vægt" use it). Entering a view resets the scroll, redraws the PMC chart (it cannot be measured while hidden) and scrolls the calendar grid to the selected week. Each view carries a large `scroll-margin-top`, because the hash token is also the element id and the browser would otherwise scroll to it.
@@ -242,16 +242,18 @@ Stat cards. They show the actual PMC (`actualPmc()`, from the logged sessions wi
 
 Compliance. `complianceBySport()` counts planned sessions on days before today and completed sessions up to and including today. A session completed today counts as planned too. Minutes are the entered ones, otherwise the planned ones. Green from 90 %, yellow from 60 %, otherwise red (of minutes).
 
-Mount points for later work, both inside the I dag view and empty:
+Mount points, both inside the I dag view. They have `display: none` while `:empty` and are drawn by `paintToday()` (it runs on every state change):
 
 ```html
-<div id="addWorkout"></div>      <!-- "+ Tilføj træning" button/form -->
-<section id="advice"></section>  <!-- plan-adjustment advice -->
+<div id="addWorkout"></div>      <!-- "+ Tilføj træning": a button that unfolds the form (extras, §3.10) -->
+<section id="advice"></section>  <!-- plan-adjustment advice (§3.11) -->
 ```
 
-They have `display: none` while `:empty`. Render into them from `paintToday()` (it runs on every state change), so they stay current.
+`#addWorkout` only repaints when its mode changes (`none`/`button`/`form`, `dataset.mode`), so a sync or a tick on another card never wipes a half-typed form. It is empty before the plan starts and after the race, because an extra needs a week document. The form (date from the plan start up to today, sport, optional title, minutes, actual pace in the sport's unit through `parsePace`, RPE 1–10, note) is built by `extraFormHtml(prefix, values)` and read by `readExtraForm(prefix)`; the prefix `ax` is the inline form and `ex` the edit sheet, so the two never share ids. Extras are opened from `[data-open-x]` buttons (no `data-key`, so `refresh()` and the quick tick never touch them) in the same `<dialog id="sheet">`. Delete shows an in-sheet confirmation (never `confirm()`) and writes a tombstone. Changing the date to another week writes a tombstone at the old key and a new key in the new week.
 
-Tests: `test/tabs.test.mjs` (routing, tab bar in both builds, Kost, compliance, Mere), `test/idag.test.mjs` (I dag for fixed fake dates), `test/views.test.mjs` (pure helpers), and `test/app-harness.mjs` (runs the bundled app in the fake DOM with a fake `location`).
+`refresh()` rebuilds the grid (keeping its scroll) and the Kost tab only when the set of extras changed (`extrasSig()`); the agenda and I dag are repainted on every change anyway.
+
+Tests: `test/tabs.test.mjs` (routing, tab bar in both builds, Kost, compliance, Mere), `test/idag.test.mjs` (I dag for fixed fake dates), `test/views.test.mjs` (pure helpers), `test/extras.test.mjs` (add, edit, delete, counting) and `test/app-harness.mjs` (runs the bundled app in the fake DOM with a fake `location`).
 
 ---
 
