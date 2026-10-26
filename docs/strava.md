@@ -15,7 +15,7 @@ Goal: TrainingPeaks-style auto-compliance. The GitHub Action reads the athlete's
 | Window | Copenhagen dates `today−3 … today` (`STRAVA_LOOKBACK_DAYS`, 1–30). Idempotent through an activity ledger plus `extId` |
 | Matching | Same Copenhagen date, same sport group. An optimal assignment per day and group minimises Σ\|Δmin\|; ties go to chronological order. A triathlon race session aggregates all of that day's swim, bike and run activities |
 | Who wins | Strava only writes to a session with **no entry**, or with a tombstone **older than the activity start**. It never touches a `done:true` entry (manual or Strava). Strava entries carry `updatedAt = activity end`, so a manual tick made after the workout always wins LWW |
-| Extras | Activities with no matching planned session are ignored. Only their count is logged. Nothing is stored |
+| Extras | Activities with no matching planned session become **extras** (`x-s<id>` keys, `source:'strava'`, `activityId`; architecture §3.10): the same Copenhagen date decides the day, an unknown sport is `other`. Those that cannot be saved (outside the plan, under 5 minutes, a race day below 25 %, an unreadable week) are only counted (`skipped`) |
 | Stored per entry | `done, updatedAt, dev:"strava", at, min, src:"strava", extId, sig`, plus the new optional `dist` (m) and `hr` (bpm). Never GPS, polylines, names or locations |
 | Failure | A Strava outage or rate limit gives a warning, and the deploy continues. Dead auth or a bug: the deploy still happens, then the `cleanup` job fails, so GitHub e-mails the user |
 
@@ -174,7 +174,7 @@ Every other field is dropped: `name`, `description`, `map`/polylines, `start_lat
 | `Ride`, `VirtualRide`, `GravelRide`, `MountainBikeRide` | bike |
 | `Run`, `TrailRun`, `VirtualRun` | run |
 | `WeightTraining`, `Crossfit`, `Workout` | str |
-| anything else (`EBikeRide`, `Walk`, `Hike`, `Yoga`, `Rowing`, …) | `null`: ignored, counted as an extra |
+| anything else (`EBikeRide`, `Walk`, `Hike`, `Yoga`, `Rowing`, …) | `null`: never matched to a session; saved as an extra with sport `other` |
 
 | Planned `s.s` | Group |
 |---|---|
@@ -205,7 +205,7 @@ A test pins the classification of all four race sessions in `plan()`.
   2. minimise Σ|a.min − s.m|;
   3. tie-break to chronological pairing (the k-th activity goes to the k-th session).
 - Pairs on **occupied** sessions *absorb* their activity. Nothing is written and nothing goes in the ledger, so a manually ticked or un-checked session never pushes its activity onto a sibling session.
-- Pairs on writable sessions produce a write. Unpaired activities are extras.
+- Pairs on writable sessions produce a write. Unpaired activities (and any beyond 6 in a group) are saved as **extras** (below). Activities under 5 minutes are skipped.
 
 **Bricks** need no special case: the bike and the run are different groups (Saturday `Lang cykeltur` + `Brick-løb`).
 
@@ -215,6 +215,15 @@ A test pins the classification of all four race sessions in `plan()`.
 - `at` = earliest start, end = latest end.
 - `extId` = the ids in start order joined by `,`. If that exceeds 64 characters, keep the 3 longest.
 - The race counts as done when Σ elapsed ≥ 0.25 · planned. Every id goes in the ledger.
+
+**Extras.** An unpaired activity (including unknown sports and activities under 25 % of every planned session) is written as `x-s<base36 of the activity id>` in the week of its Copenhagen date, through `stampExtra`:
+
+```js
+stampExtra({ day: di, sport: group ?? 'other', min, dist, hr, source: 'strava', activityId: a.id },
+           null, { now: new Date(a.endMs), dev: 'strava' })       // updatedAt = activity end, as for sessions
+```
+
+The key is derived from the id, so the same activity can never make a duplicate, and a tombstone written by the app (the user deleted it) is final: an existing entry at the key, tombstone included, is never overwritten. The ledger records `{ d, w, k: 'x-s…' }` as for sessions. The remote scan for consumed ids also reads `activityId`. A lost extra is written again (`healed`) while its activity is still fetched. No extra is written to a week whose file is unreadable, for activities outside the plan, or under 5 minutes.
 
 **Entry written** (pure; through `stampEntry` so validation is shared):
 
@@ -271,7 +280,7 @@ Why `updatedAt = activity end` and not the time of the CI run: a manual tick mad
   - polylines, lat/lng, city, gear or device;
   - raw response bodies, and request URLs with their query strings.
 - The gist receives only the §4.3 entry fields and `_strava.json`, which holds ciphertext and the ledger (activity ids, dates and session keys only).
-- Logs carry counts only, for example: `Strava: 6 aktiviteter i vinduet · 3 nye pas · 1 genskabt · 1 optaget (manuel/fjernet) · 1 uden plan`.
+- Logs carry counts only, for example: `Strava: 6 aktiviteter i vinduet · 3 nye pas · 1 genskabt · 1 optaget (manuel/fjernet) · 1 ekstra · 1 ignoreret`.
 - No per-session lines in CI: which sessions were done is private, even though the plan is public.
 - Error text is our own Danish sentence plus the HTTP status. Strava's error JSON is never echoed.
 - Use `::add-mask::` for the access token and new refresh tokens (§2.2). No `set -x`, and no env dumps.
@@ -457,6 +466,7 @@ The fixtures under `test/fixtures/strava/` are recorded-shape fakes:
 
 ## 13. Implementation notes (deviations from the design above)
 
+- **Extras (changed after the first implementation).** Unmatched activities are no longer only counted: they are stored as extras (see §4.3, §0 and architecture §3.10). `stats` gained `skipped` (and `extras` now counts stored ones); the log line says `N ekstra` and, when something was not saved, `N ignoreret`. The ledger keys may be `x-s…`. `scripts/fetch-progress.mjs` and `src/ics.js` ignore `x-` keys, so the calendar still shows the plan only.
 - `strava-auth.mjs` has `--read-all` instead of `--scope`. Any other flag is a usage error (exit 2).
 - A 401/403/404 from the gist itself (a dead or expired `GIST_WRITE_TOKEN`, a wrong `GIST_ID`) gives status `error` (red run, e-mail), not `unavailable`: it never heals by itself. Network errors, 5xx and rate limits stay `unavailable`. Strava is still not called.
 - The `cleanup` alert step receives the status through `env:` (`STRAVA_STATUS`) instead of interpolating it into the `run:` script.

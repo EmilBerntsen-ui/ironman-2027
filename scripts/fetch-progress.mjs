@@ -9,7 +9,7 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { META_FILE, mergeWeek, parseWeekFile, toExport } from '../src/progress.js';
+import { META_FILE, mergeWeek, parseWeekFile, sessionsOnly, toExport } from '../src/progress.js';
 
 const WEEK_FILE = /^u\d{2}\.json$/;
 const GIST_ID_RE = /^[A-Za-z0-9]{1,64}$/;
@@ -92,7 +92,8 @@ export async function fetchProgress({
     // Beskadiget eller afkortet ugefil: spring den over (og tæl den), så én dårlig fil ikke blokerer alle deploys.
     const parsed = isObj(file) && !file.truncated && typeof file.content === 'string' ? parseWeekFile(name, file.content) : null;
     if (!parsed) { stats.skipped++; continue; }
-    progress[parsed.weekId] = mergeWeek(progress[parsed.weekId] ?? {}, parsed.week);
+    // Kalenderen viser kun planen: ekstra træning (x-<id>) forlader aldrig gisten og kommer ikke med i filen til byggetrinnet.
+    progress[parsed.weekId] = mergeWeek(progress[parsed.weekId] ?? {}, sessionsOnly(parsed.week));
   }
   for (const week of Object.values(progress)) {
     const entries = Object.values(week);

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { plan } from '../src/plan.js';
 import { buildIcs, parseSchedule } from '../src/ics.js';
-import { parseAny } from '../src/progress.js';
+import { isExtraKey, parseAny } from '../src/progress.js';
 
 const weeks = plan();
 const now = new Date('2026-11-02T12:00:00Z');
@@ -191,4 +191,21 @@ test('parseSchedule: afviser ugyldige skemaer, og fejlen citerer aldrig værdien
   ];
   for (const b of bad) assert.throws(() => parseSchedule(b), e => e instanceof TypeError && !/HEMMELIG|6:00|24:00|06:60/.test(e.message), JSON.stringify(b));
   assert.throws(() => buildIcs(weeks, now, { schedule: { days: [] } }), TypeError);
+});
+
+
+test('ekstra træning (x-<id>) når aldrig kalenderen: samme .ics med og uden ekstra, og ingen titel, note eller RPE fra dem', () => {
+  const x = (day, extra = {}) => ({ day, sport: 'run', min: 70, source: 'manual', updatedAt: '2026-11-03T18:00:00.000Z', dev: 'fixture1', ...extra });
+  const withExtras = parseAny(fixture);
+  withExtras.u01['x-ekstra01'] = x(1, { title: 'EKSTRA-TITEL-XYZ', note: 'EKSTRA-NOTE-XYZ', rpe: 9 });
+  withExtras.u02['x-ekstra02'] = x(2, { sport: 'other', title: 'Fodbold' });
+  withExtras.u02['x-ekstra03'] = { deleted: true, updatedAt: '2026-11-04T18:00:00.000Z' };
+  withExtras.u05 = { 'x-ekstra04': x(0) }; // en uge med kun ekstra
+  assert.ok(Object.values(withExtras).some(w => Object.keys(w).some(isExtraKey)));
+  for (const opts of [{}, { schedule: SCHEDULE }]) {
+    assert.equal(buildIcs(weeks, now, { progress: withExtras, ...opts }), buildIcs(weeks, now, { progress, ...opts }), 'kalenderen viser kun planen');
+  }
+  const ics = unfold(buildIcs(weeks, now, { progress: withExtras }));
+  for (const word of ['EKSTRA', 'Fodbold', 'x-ekstra']) assert.ok(!ics.includes(word), word);
+  assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, (baseline.match(/BEGIN:VEVENT/g) || []).length, 'ingen ekstra begivenheder');
 });

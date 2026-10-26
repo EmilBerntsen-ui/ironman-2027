@@ -15,7 +15,7 @@ import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { plan } from '../src/plan.js';
-import { META_FILE, mergeWeek, parseWeekFile, serializeWeek, stableStringify } from '../src/progress.js';
+import { META_FILE, isExtraKey, isSessionKey, mergeWeek, parseWeekFile, serializeWeek, stableStringify } from '../src/progress.js';
 import {
   HttpError, STRAVA_API, STRAVA_OAUTH, UsageError, cphDate, describeHttpError, fetchJson, listActivities, matchActivities, refreshToken, validBase,
 } from './lib/strava.mjs';
@@ -62,7 +62,7 @@ export const fingerprint = token => createHash('sha256').update(token).digest('h
 // ---- _strava.json ----
 
 const EMPTY_STATE = () => ({ rt: null, base: null, seen: {} });
-const ledgerOk = l => isObj(l) && typeof l.d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(l.d) && typeof l.w === 'string' && /^u\d{2}$/.test(l.w) && typeof l.k === 'string' && /^[0-6]-\d{1,2}$/.test(l.k);
+const ledgerOk = l => isObj(l) && typeof l.d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(l.d) && typeof l.w === 'string' && /^u\d{2}$/.test(l.w) && typeof l.k === 'string' && (isSessionKey(l.k) || isExtraKey(l.k));
 
 // → { rt, base, seen } eller null (ugyldig fil, forkert format eller version).
 export function parseState(text) {
@@ -217,7 +217,7 @@ export async function syncStrava({
   const today = cphDate(nowDate);
   const res = matchActivities({ weeks: plan(), progress: g.weeks, activities, ledger: current.seen, today, lookbackDays: lookback, blocked: g.blocked });
   const s = res.stats;
-  const logLine = () => out(`Strava${dryRun ? ' (prøvekørsel)' : ''}: ${s.window} aktiviteter i vinduet · ${s.matched} nye pas · ${s.healed} genskabt · ${s.occupied} optaget (manuel/fjernet) · ${s.extras} uden plan${s.known ? ` · ${s.known} allerede hentet` : ''}`);
+  const logLine = () => out(`Strava${dryRun ? ' (prøvekørsel)' : ''}: ${s.window} aktiviteter i vinduet · ${s.matched} nye pas · ${s.healed} genskabt · ${s.occupied} optaget (manuel/fjernet) · ${s.extras} ekstra${s.skipped ? ` · ${s.skipped} ignoreret` : ''}${s.known ? ` · ${s.known} allerede hentet` : ''}`);
   const writeWeeks = Object.keys(res.writes).sort();
   const seenChanged = JSON.stringify(sortedSeen(res.ledger)) !== JSON.stringify(sortedSeen(current.seen));
 

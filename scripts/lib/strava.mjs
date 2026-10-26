@@ -2,7 +2,7 @@
 // Rå Strava-objekter røres kun af pickActivity(), som lægger en hvidliste over dem med det samme. Resten af koden ser aldrig navne,
 // kort, koordinater, sted, gear eller enhed, så intet af det kan havne i logs eller i gisten.
 import { addDays, isoDate } from '../../src/plan.js';
-import { sessionSig, stampEntry } from '../../src/progress.js';
+import { isExtraKey, sessionSig, stampEntry, stampExtra } from '../../src/progress.js';
 
 export const STRAVA_API = 'https://www.strava.com/api/v3';
 export const STRAVA_OAUTH = 'https://www.strava.com/oauth';
@@ -50,6 +50,12 @@ const STRAVA_GROUPS = {
 };
 // Strava sport_type → swim | bike | run | str, ellers null (EBikeRide, Walk, Hike, Yoga, Rowing … er ekstra).
 export const sportGroup = type => (typeof type === 'string' && hasOwn(STRAVA_GROUPS, type) ? STRAVA_GROUPS[type] : null);
+
+// Aktivitetens gruppe → sport for en ekstra (ukendt sport = 'other').
+const extraSport = group => (group === 'swim' || group === 'bike' || group === 'run' || group === 'str' ? group : 'other');
+// Ekstra-nøglen afledes af aktivitets-id'et (x-s + base36), så den samme aktivitet altid får samme nøgle: en dobbeltkørsel kan ikke lave dubletter,
+// og en gravsten (slettet ekstra) står ved magt, selv hvis hovedbogen er tom.
+export const extraKeyFor = id => `x-s${BigInt(id).toString(36).padStart(2, '0')}`;
 
 // Planlagt pas → gruppe: swim | bike | run | str | tri (race med svømning) | null (hvile eller 0 min, matches aldrig).
 export function sessionGroup(s) {
@@ -139,6 +145,14 @@ function buildEntry(session, acts, prev) {
   return stampEntry(patch, prev ?? null, { now: new Date(Math.max(...sorted.map(a => a.endMs))), dev: ENTRY_DEV });
 }
 
+// Ekstra (uplanlagt) træning fra en aktivitet uden pas: { day, sport, min, dist?, hr?, source: 'strava', activityId }. updatedAt = aktivitetens slut, som for pas.
+function buildExtra(a, di) {
+  const patch = { day: di, sport: extraSport(a.group), min: a.min, source: 'strava', activityId: a.id };
+  if (a.dist != null) patch.dist = a.dist;
+  if (a.hr != null) patch.hr = a.hr;
+  return stampExtra(patch, null, { now: new Date(a.endMs), dev: ENTRY_DEV });
+}
+
 // Matcher aktiviteter mod planen (docs/strava.md §4.3–§4.4). Ren funktion: rører hverken input, net eller ur.
 //   weeks       plan()-uger ({ id, start, days })
 //   progress    fjernstatus: weekId → Week (kun læst)
@@ -146,7 +160,9 @@ function buildEntry(session, acts, prev) {
 //   ledger      id → { d, w, k } fra _strava.json
 //   today       dansk dato 'YYYY-MM-DD' (eller Date/ms)
 //   blocked     uge-id'er der ikke må skrives til (ulæselig ugefil i gisten): behandles som optaget
-// → { writes: weekId → { sessionKey → Entry }, ledger, stats: { window, matched, healed, occupied, extras, known } }
+//   Aktiviteter der ikke hører til et pas bliver ekstra (`x-s<id>`, source 'strava'); de der ikke kan gemmes (uden for planen, under 5 min,
+//   en løbsdag der ikke når 25 %, en ulæselig uge) tælles som `skipped`.
+// → { writes: weekId → { sessionKey|extraKey → Entry|Extra }, ledger, stats: { window, matched, healed, occupied, extras, skipped, known } }
 export function matchActivities({ weeks, progress = {}, activities = [], ledger = {}, today, lookbackDays = 3, blocked = [] }) {
   const todayStr = typeof today === 'string' ? today : cphDate(today);
   const from = shiftDate(todayStr, -lookbackDays);
@@ -163,12 +179,12 @@ export function matchActivities({ weeks, progress = {}, activities = [], ledger 
   const remote = (w, k) => (isObj(progress[w]) && hasOwn(progress[w], k) ? progress[w][k] : null);
 
   const consumed = new Set(Object.keys(ledger));
-  for (const week of Object.values(progress)) for (const e of Object.values(week ?? {})) if (e?.extId) for (const id of String(e.extId).split(',')) consumed.add(id);
+  for (const week of Object.values(progress)) for (const e of Object.values(week ?? {})) for (const ids of [e?.extId, e?.activityId]) if (ids) for (const id of String(ids).split(',')) consumed.add(id);
 
   const byId = new Map(activities.map(a => [a.id, a]));
   const writes = {};
   const out = { ...ledger };
-  const stats = { window: 0, matched: 0, healed: 0, occupied: 0, extras: 0, known: 0 };
+  const stats = { window: 0, matched: 0, healed: 0, occupied: 0, extras: 0, skipped: 0, known: 0 };
   const claimed = new Set(); // mål der genskabes i denne kørsel: ingen nye aktiviteter lander ovenpå
   const put = (w, k, entry) => { (writes[w] ??= {})[k] = entry; };
   const ledgerAdd = (acts, w, k) => { for (const a of acts) out[a.id] = { d: a.date, w, k }; };
@@ -179,6 +195,14 @@ export function matchActivities({ weeks, progress = {}, activities = [], ledger 
   for (const [t, ids] of [...groups].sort(([a], [b]) => (a < b ? -1 : 1))) {
     const [w, k] = t.split('|');
     if (blockedWeeks.has(w) || remote(w, k)) continue;              // ulæselig uge: rør ikke; et pas (også en gravsten) står ved magt
+    if (isExtraKey(k)) { // en ekstra der er tabt: skrives igen fra aktiviteten, hvis den stadig er hentet
+      const a = ids.map(id => byId.get(id)).find(Boolean), day = a && days.get(a.date);
+      if (!a || !day || day.weekId !== w || a.min < 1) { for (const id of ids) delete out[id]; continue; }
+      put(w, k, buildExtra(a, day.di));
+      claimed.add(t);
+      stats.healed++;
+      continue;
+    }
     const session = target.get(t);
     const acts = ids.map(id => byId.get(id)).filter(Boolean);
     if (!session || !acts.length) { for (const id of ids) delete out[id]; continue; } // ukendt pas eller aktiviteten er ikke længere hentet
@@ -193,7 +217,7 @@ export function matchActivities({ weeks, progress = {}, activities = [], ledger 
   const perDate = new Map();
   for (const a of inWindow) {
     if (consumed.has(a.id)) { stats.known++; continue; }
-    if (!a.group || !days.has(a.date)) { stats.extras++; continue; } // ukendt sport, eller en dag uden for planen
+    if (!days.has(a.date)) { stats.skipped++; continue; } // en dag uden for planen: ingen ugefil at gemme i
     (perDate.get(a.date) ?? perDate.set(a.date, []).get(a.date)).push(a);
   }
 
@@ -202,6 +226,16 @@ export function matchActivities({ weeks, progress = {}, activities = [], ledger 
     let acts = perDate.get(date).sort((a, b) => a.startMs - b.startMs || (a.id < b.id ? -1 : 1));
     const slots = sessions.map((s, si) => ({ s, si, key: `${di}-${si}`, group: sessionGroup(s) })).filter(x => x.group);
     const isOccupied = (x, startMs) => blockedWeeks.has(weekId) || claimed.has(`${weekId}|${x.key}`) || !writable(remote(weekId, x.key), startMs);
+    // Ikke parret med et pas: gem som ekstra. Findes nøglen allerede (også som gravsten), er den allerede håndteret.
+    const asExtra = a => {
+      const k = extraKeyFor(a.id);
+      if (blockedWeeks.has(weekId) || a.min < MIN_ACTIVITY_MIN) { stats.skipped++; return; }
+      if (remote(weekId, k) || claimed.has(`${weekId}|${k}`)) { stats.known++; return; }
+      put(weekId, k, buildExtra(a, di));
+      claimed.add(`${weekId}|${k}`);
+      ledgerAdd([a], weekId, k);
+      stats.extras++;
+    };
 
     // Triatlon-løb: alle dagens svømme-, cykel- og løbeaktiviteter går til løbet.
     const race = slots.find(x => x.group === 'tri');
@@ -210,7 +244,7 @@ export function matchActivities({ weeks, progress = {}, activities = [], ledger 
       acts = acts.filter(a => !legs.includes(a));
       if (legs.length) {
         const sec = legs.reduce((n, a) => n + a.elapsedSec, 0);
-        if (sec / 60 < MIN_SHARE * race.s.m) stats.extras += legs.length;
+        if (sec / 60 < MIN_SHARE * race.s.m) stats.skipped += legs.length;
         else if (isOccupied(race, Math.min(...legs.map(a => a.startMs)))) stats.occupied += legs.length;
         else { put(weekId, race.key, buildEntry(race.s, legs, remote(weekId, race.key))); ledgerAdd(legs, weekId, race.key); stats.matched++; }
       }
@@ -220,11 +254,11 @@ export function matchActivities({ weeks, progress = {}, activities = [], ledger 
       const S = slots.filter(x => x.group === group);
       const ofGroup = acts.filter(a => a.group === group);
       const A = ofGroup.filter(a => a.min >= MIN_ACTIVITY_MIN);
-      stats.extras += ofGroup.length - Math.min(A.length, MAX_PER_GROUP);
+      stats.skipped += ofGroup.length - A.length; // for korte (opvarmning, fejlstart)
       const used = A.slice(0, MAX_PER_GROUP);
-      if (!S.length) { stats.extras += used.length; continue; }
-      const pairs = assign(S, used);
-      stats.extras += used.length - pairs.length;
+      const rest = A.slice(MAX_PER_GROUP); // flere end 6 i samme gruppe samme dag: resten er ekstra
+      const pairs = S.length ? assign(S, used) : [];
+      const paired = new Set(pairs.map(([, j]) => j));
       for (const [i, j] of pairs) {
         const x = S[i], a = used[j];
         if (isOccupied(x, a.startMs)) { stats.occupied++; continue; } // manuel eller fjernet: absorberer aktiviteten, ingen skrivning
@@ -232,7 +266,10 @@ export function matchActivities({ weeks, progress = {}, activities = [], ledger 
         ledgerAdd([a], weekId, x.key);
         stats.matched++;
       }
+      used.forEach((a, j) => { if (!paired.has(j)) asExtra(a); });
+      rest.forEach(asExtra);
     }
+    for (const a of acts.filter(x => !x.group)) asExtra(a); // ukendt sport (gåtur, yoga, …)
   }
 
   // 3. Beskær hovedbogen (ældre end 30 dage).

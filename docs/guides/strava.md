@@ -8,9 +8,11 @@ Kun den, der ejer repoet, kan sætte det op. Kommandoerne køres fra roden af re
 
 ## Det her gemmes (og ikke)
 
+Aktiviteter der ikke passer til et planlagt pas (en gåtur, en ekstra løbetur), kommer i appen som et stiplet "Ekstra"-kort med sport, minutter, afstand og puls. Slet dem i appen, hvis du ikke vil se dem; de kommer ikke tilbage. Kalenderen (.ics) viser stadig kun planen.
+
 Hvert flueben fra Strava får: gennemført, tidspunkt, **minutter**, **afstand** og **gennemsnitspuls** (hvis uret målte den), og id'et på aktiviteten, så appen kan linke til den (*Se på Strava* i pasets detaljevisning).
 
-Aldrig gemt eller skrevet i logs: aktivitetens navn, beskrivelse, kort, rute, GPS, sted, udstyr, enhed eller dit Strava-navn. Logfilerne på GitHub er offentlige, så de indeholder kun tal, fx `Strava: 6 aktiviteter i vinduet · 3 nye pas · 0 genskabt · 1 optaget (manuel/fjernet) · 1 uden plan`. Hvilke pas du har gennemført, står aldrig i loggen.
+Aldrig gemt eller skrevet i logs: aktivitetens navn, beskrivelse, kort, rute, GPS, sted, udstyr, enhed eller dit Strava-navn. Logfilerne på GitHub er offentlige, så de indeholder kun tal, fx `Strava: 6 aktiviteter i vinduet · 3 nye pas · 0 genskabt · 1 optaget (manuel/fjernet) · 1 ekstra`. Hvilke pas du har gennemført, står aldrig i loggen.
 
 ## Engangsopsætning
 

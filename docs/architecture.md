@@ -13,6 +13,7 @@ Assumed repo and URL: `github.com/EmilBerntsen-ui/ironman-2027` (public), served
 | Targets | `node build.mjs --target=artifact\|site\|all` writes `dist/artifact/index.html` and `dist/site/**`. A mini-bundler uses a module list per target. Build output contains no timestamps (content hashes only) |
 | Storage | One `Store` interface with three implementations: `LocalStore` (both targets), `ArtifactDbStore` (artifact only) and `GistStore` (site only). `app.js` picks one from the target and the saved config |
 | Data | Schema v2. Merge is last-writer-wins per session on `updatedAt`. Un-checking writes a tombstone `{done:false}`. v1 data stays readable. No GC, because the key space is bounded at about 430 sessions |
+| Extras | Unplanned workouts live in the same per-week documents under `x-<id>` keys (`{ day, sport, min, … source }`), merged per key like sessions, deleted with a tombstone. Counted in week hours, compliance minutes (shown as "+ ekstra") and the actual PMC; never in the `.ics` or the CI progress file. Details in §3.10 |
 | Gist layout | One file per week (`u01.json`…`u43.json`) plus a marker file `_ironman-2027.json`. A PATCH sends only the dirty week files |
 | Sync | State-based. Each device keeps a full merged replica. Sync runs GET (with ETag), merge, PATCH, then a verify read. Polls every 60 s while visible and on focus/online. A queue of dirty weeks lives in localStorage |
 | Auth/security | One fine-grained PAT per device, with Gists read/write only, kept in localStorage. Strict meta CSP, self-hosted fonts, no third-party JS |
@@ -277,7 +278,7 @@ Tests: `test/tabs.test.mjs` (routing, tab bar in both builds, Kost, compliance, 
 ```
 
 - Tombstone: `{"done": false, "updatedAt": "…", "dev": "…"}`. All detail fields are dropped, `dist`, `hr` and `pace` too.
-- Keys are unchanged from v1. `weekId` matches `/^u\d{2}$/`. `sessionKey` matches `/^[0-6]-\d{1,2}$/` (day with Monday = 0, then session index).
+- Keys are unchanged from v1. `weekId` matches `/^u\d{2}$/`. `sessionKey` matches `/^[0-6]-\d{1,2}$/` (day with Monday = 0, then session index). A third key shape, `x-<id>`, holds an unplanned workout (§3.10).
 
 ### 3.2 `src/progress.js` API
 
@@ -301,6 +302,13 @@ export function parseWeekFile(name, text)             // → { weekId, week } | 
 export function parseAny(json)                        // → Progress; accepts v2 export, raw v2 Progress, v1 localStorage blob, v1 artifact docs
 export function toExport(progress, now)               // → { format, v: 2, kind: 'export', exportedAt, weeks }
 export function stableStringify(value)
+// extras (§3.10)
+export function isSessionKey(k), isExtraKey(k), isExtra(e)     // key shapes; a live (not deleted) extra
+export function newExtraKey(now, random)                       // 'x-' + base36 time + 2 random chars
+export function normalizeExtra(raw)                            // → Extra | null (a tombstone keeps nothing but updatedAt/dev)
+export function stampExtra(patch, prev, { now, dev })          // like stampEntry; null or { deleted: true } = tombstone
+export function liveExtras(progress)                           // → [{ weekId, key, e, dayIdx }] sorted
+export function sessionsOnly(week)                             // the week without x- keys
 ```
 
 ### 3.3 Merge, compatibility and validation
@@ -412,6 +420,7 @@ Afterwards the artifact keeps its own separate storage. There is deliberately no
 Designed in [strava.md](strava.md). What this document fixes:
 - The fields `src`, `extId`, `min` and (new) `dist` and `hr`.
 - The rule: an importer creates entries only for sessions that have no `done:true` entry, and it never overwrites a done entry (manual or Strava). A Strava entry carries `updatedAt` = the activity's end, so a manual tick made after the workout wins last-writer-wins.
+- Activities that match no planned session become extras (§3.10, `source:'strava'`, `x-s<id>` keys; [strava.md](strava.md) §4.3). The importer never overwrites an existing extra key, a tombstone included.
 - The gist gets one more file, `_strava.json`, which only CI writes (encrypted refresh token and an activity ledger). `parseWeekFile` only accepts `u\d\d.json`, so every existing reader ignores it.
 
 ### 3.8 Pace: zones, recommended and actual
@@ -473,6 +482,34 @@ Weight (`parseWeight`, `readWeight`, `saveWeight`). 35–200 kg, comma or point.
 Guide. `kostGuide(weight)` returns the guide as data (day table, before/during/after, race week, supplements, warning signs, weekly weigh-in, sources) and `app.js` draws it in a collapsible section. The link to the report lives in JS, not in `app.html`, because the site document may name no external address but `api.github.com` (`test/site.test.mjs`). The guide carries the line `Generel vejledning, ikke individuel lægefaglig rådgivning.`
 
 `.ics`. `energyLine(session)` gives `Energi undervejs: 30–60 g kulhydrat/t` or `60–90 g/t (glukose + fruktose)` for sessions over 75 minutes (races: bike and run), and nothing otherwise.
+
+### 3.10 Extras (unplanned workouts)
+
+```jsonc
+"x-mh3k9a12": {
+  "day": 2,                                  // 0–6, Monday = 0, in the week the document belongs to
+  "sport": "run",                            // "swim" | "bike" | "run" | "str" | "other"
+  "title": "Fodbold",                        // optional, ≤ 80 chars
+  "min": 55,                                 // integer 1..900 (required)
+  "pace": 330, "dist": 10200, "hr": 148,     // optional, as in §3.1; the unit of pace follows the sport (never for str/other)
+  "rpe": 7, "note": "…",                     // optional, as in §3.1
+  "source": "manual",                        // "manual" | "strava" | "intervals" (absent = manual)
+  "activityId": "12345678901",               // optional: the external activity id (Strava, intervals.icu)
+  "updatedAt": "2026-11-24T06:58:01.123Z",   // required, LWW key
+  "dev": "k3f9a2c1"
+}
+```
+
+- Lives next to the sessions in the **same week document** (`u05.json`, the Artifact `progress/u05` doc, `LocalStore`). The key is `/^x-[a-z0-9]{3,24}$/`. A manual extra gets `newExtraKey()` (`x-` + the time in base36 + 2 random characters); the Strava importer derives `x-s<base36 of the activity id>` so one activity can never make two extras.
+- Merge is per key with the same total order as sessions (`updatedAt`, `dev`, `stableStringify`). Deleting writes a tombstone `{ "deleted": true, "updatedAt": "…", "dev": "…" }` and drops every detail. The key space is bounded by the number of workouts, so no GC.
+- `normalizeExtra` validates every byte from outside. A live extra needs `day`, `sport` and `min`, or it is dropped; the optional fields are dropped one by one when invalid; unknown keys follow the rule in §3.3. Documents without extras are valid v2 documents, and all three stores round-trip extras through `save(weekId, 'x-…', patch | null)` (`stampExtra`), `importProgress` and sync. `parseAny`, `toExport` and `serializeWeek` carry them.
+- An app version from before this feature drops `x-` keys when it reads a week and writes it back; a device that has them re-pushes the week at its next sync (the self-heal step in §3.5), so nothing is lost as long as one device runs the new version.
+- Counting (`src/app.js`, `src/views.js`, `src/plan.js`):
+  - week hours done and the progress text (`+ N ekstra`) include extras; the session counts (`Pas 3/9`) and the card colours (`st-*`) do not;
+  - the compliance table keeps the planned minutes and percentage and shows the extra minutes per sport as `+ N min ekstra` (`other` is `Andet`);
+  - the actual PMC adds `extraTss(e)` on the extra's day: `min × IF² × 100/60`, with IF by RPE (≤ 3: 0.65, 4–6: 0.75, 7–8: 0.85, 9–10: 0.9, no RPE: 0.7), and strength fixed like `tss()` (20/25/30);
+  - the nutrition day chip, the Kost tab and the weekly kcal average use the planned minutes of the day plus the extras' minutes (an extra is treated as a pseudo-session of its sport, so the day type can rise);
+  - the planned PMC, the planned TSS and the `.ics` never see extras. `scripts/fetch-progress.mjs` strips `x-` keys (`sessionsOnly`), so the CI progress file has none, and `buildIcs` only ever reads `${di}-${si}` keys (both tested).
 
 ---
 
@@ -657,7 +694,7 @@ One-time setup:
   - `GIST_READ_TOKEN`: **required for ✅ marks**. If `GIST_ID` is set but the token is empty, print a `::warning::` annotation that explains that the ✅ marks are skipped and that the read token is required. Write no file (a stale one is removed) and exit 0. The deploy never fails because of a missing token.
   - `GIST_API`: default `https://api.github.com`; tests point it at a fake.
 - Makes 3 attempts, waiting 1 s and then 4 s. If all fail it exits 1: the deploy is skipped and yesterday's calendar stays, which is better than wiping the ✅ marks.
-- Writes `Progress` JSON built through `parseWeekFile`. It prints only counts, never content.
+- Writes `Progress` JSON built through `parseWeekFile`, with the extras (`x-` keys, §3.10) removed: the calendar shows the plan only. It prints only counts, never content.
 
 ### 5.4 ICS completion marks
 
@@ -671,7 +708,7 @@ The signature becomes `buildIcs(weeks, now = new Date(), { progress = null, sche
 There is deliberately no mark for missed sessions: the calendar only ever shows what was done.
 
 - `UID`, `DTSTART` and `DURATION` stay unchanged, so clients update events in place.
-- Only `done` and `min` are read from `progress`.
+- Only `done` and `min` are read from `progress`, and only from the session keys `${di}-${si}`: extras (`x-` keys, §3.10) never reach the calendar (tested).
 - Every description also has a line `Anbefalet: …` (recommended pace, §3.8) before the week line. It comes from the plan alone, never from `progress`, so it is the same with and without marks. Strength sessions have none.
 - Sessions over 75 minutes have one more line, `Energi undervejs: …` (§3.9), right after `Anbefalet`. It is g/h only: never weight, kcal or g/kg, so the calendar carries no body data.
 - With `progress = null` the output is byte-identical to today's, and `test/plan.test.mjs` stays green.

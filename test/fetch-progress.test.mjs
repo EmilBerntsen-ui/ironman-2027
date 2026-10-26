@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { FORMAT, META_FILE, parseAny, serializeWeek } from '../src/progress.js';
+import { FORMAT, META_FILE, isExtraKey, parseAny, serializeWeek } from '../src/progress.js';
 import { SKIP_WARNINGS, fetchProgress } from '../scripts/fetch-progress.mjs';
 
 const SCRIPT = fileURLToPath(new URL('../scripts/fetch-progress.mjs', import.meta.url));
@@ -181,4 +181,24 @@ test('CLI uden --out giver brugsvejledning og exit 2', async () => {
   assert.equal(r.code, 2);
   assert.match(r.stderr, /--out/);
   assert.equal(requests.length, 0);
+});
+
+
+test('ekstra træning (x-<id>) ignoreres: filen til kalenderen og tallene rummer kun planlagte pas', async () => {
+  const x = (day, extra = {}) => ({ day, sport: 'bike', min: 60, source: 'manual', updatedAt: '2026-11-04T18:00:00.000Z', dev: 'fake0001', ...extra });
+  handler = () => [200, gistBody({
+    'u01.json': { filename: 'u01.json', content: serializeWeek('u01', { ...WEEKS.u01, 'x-ekstra01': x(2, { note: 'EKSTRA-NOTE-XYZ', title: 'EKSTRA-TITEL' }), 'x-ekstra02': { deleted: true, updatedAt: '2026-11-05T18:00:00.000Z' } }) },
+    'u04.json': { filename: 'u04.json', content: serializeWeek('u04', { 'x-ekstra03': x(0) }) }, // en uge med kun ekstra
+  })];
+  const r = await fetchProgress({ env: env(), sleep: noSleep });
+  assert.deepEqual(r.stats, { weeks: 2, sessions: 3, done: 2, skipped: 0 }, 'ekstra tæller ikke som pas');
+  assert.ok(Object.values(r.progress).every(w => Object.keys(w).every(k => !isExtraKey(k))), 'ingen x-nøgler');
+  assert.deepEqual(r.progress.u01, parseAny({ format: FORMAT, v: 2, weeks: { u01: WEEKS.u01 } }).u01);
+  const out = join(tmp, 'ekstra.json');
+  const cliRun = await cli(['--out', out], env());
+  assert.equal(cliRun.code, 0, cliRun.stderr);
+  const file = readFileSync(out, 'utf8');
+  for (const word of ['x-ekstra', 'EKSTRA']) assert.ok(!file.includes(word), word);
+  assert.deepEqual(parseAny(file), parseAny({ format: FORMAT, v: 2, weeks: WEEKS }));
+  assert.match(cliRun.stdout, /2 uger, 3 pas \(2 gennemført\)/);
 });

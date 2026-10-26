@@ -3,8 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { plan, addDays, isoDate } from '../src/plan.js';
-import { mergeEntry, mergeWeek, normalizeEntry, parseWeekFile, serializeWeek } from '../src/progress.js';
-import { cphDate, matchActivities, pickActivity, sessionGroup, shiftDate, sportGroup } from '../scripts/lib/strava.mjs';
+import { isExtraKey, mergeEntry, mergeWeek, normalizeEntry, normalizeExtra, parseWeekFile, serializeWeek } from '../src/progress.js';
+import { cphDate, extraKeyFor, matchActivities, pickActivity, sessionGroup, shiftDate, sportGroup } from '../scripts/lib/strava.mjs';
 
 const weeks = plan();
 const fixture = name => JSON.parse(readFileSync(new URL(`./fixtures/strava/${name}`, import.meta.url), 'utf8'));
@@ -131,7 +131,7 @@ test('vindue og plan: uden for [i dag − L, i dag], før planstart og efter lø
   const before = raw({ id: 31, type: 'Run', start: '2026-10-25T10:00:00Z', elapsed: 2700 });   // søndag før START
   const r1 = run([before], { today: '2026-10-26', lookbackDays: 3 });
   assert.deepEqual(r1.writes, {});
-  assert.deepEqual(r1.stats, { window: 1, matched: 0, healed: 0, occupied: 0, extras: 1, known: 0 });
+  assert.deepEqual(r1.stats, { window: 1, matched: 0, healed: 0, occupied: 0, extras: 0, skipped: 1, known: 0 }, 'uden for planen: ingen ugefil at gemme i');
 
   const old = raw({ id: 32, type: 'Run', start: '2026-11-03T16:00:00Z', elapsed: 2400 });      // tirsdag, uden for tre dages vindue
   const inside = raw({ id: 33, type: 'Run', start: '2026-11-08T09:00:00Z', elapsed: 1500 });   // søndag
@@ -163,7 +163,7 @@ test('pas fra Strava: nøjagtige felter, updatedAt = aktivitetens slut, dev stra
   assert.deepEqual(parseWeekFile('u02.json', file).week, r.writes.u02);
   assert.equal(serializeWeek('u02', parseWeekFile('u02.json', file).week), file);
   assert.deepEqual(r.ledger, { 11111111101: { d: '2026-11-06', w: 'u02', k: key } });
-  assert.deepEqual(r.stats, { window: 1, matched: 1, healed: 0, occupied: 0, extras: 0, known: 0 });
+  assert.deepEqual(r.stats, { window: 1, matched: 1, healed: 0, occupied: 0, extras: 0, skipped: 0, known: 0 });
   for (const d of DECOYS) assert.ok(!(file + JSON.stringify(r.ledger)).includes(d), d);
 });
 
@@ -175,16 +175,36 @@ test('pas fra Strava: uden afstand og puls udelades felterne; svømning med elap
   assert.equal(e.updatedAt, '2026-11-04T16:50:00.000Z');
 });
 
-test('uge 2 fra fixturen: fredag VirtualRide, lørdag brick (cykel + løb), tirsdag styrke, onsdag svøm; gåtur er ekstra', () => {
+test('uge 2 fra fixturen: fredag VirtualRide, lørdag brick (cykel + løb), tirsdag styrke, onsdag svøm; gåtur er en ekstra', () => {
   const r = matchActivities({ weeks, progress: {}, activities: picked(fixture('activities-week2.json')), ledger: {}, today: '2026-11-08', lookbackDays: 7 });
-  assert.deepEqual(Object.keys(flat(r.writes)).sort(), ['u01.6-0', 'u02.1-1', 'u02.2-0', 'u02.4-0', 'u02.5-0', 'u02.5-1']);
+  const walk = extraKeyFor('11111111104');
+  assert.deepEqual(Object.keys(flat(r.writes)).sort(), ['u01.6-0', 'u02.1-1', 'u02.2-0', 'u02.4-0', 'u02.5-0', 'u02.5-1', `u02.${walk}`]);
+  assert.deepEqual(r.writes.u02[walk], { day: 6, sport: 'other', min: 38, source: 'strava', activityId: '11111111104', updatedAt: '2026-11-08T09:40:00.000Z', dev: 'strava' });
   assert.equal(r.writes.u02['4-0'].sig, 'bike:Rolig cykel');
   assert.equal(r.writes.u02['5-0'].sig, 'bike:Lang cykeltur');
   assert.equal(r.writes.u02['5-1'].sig, 'run:Brick-løb');
   assert.equal(r.writes.u02['1-1'].sig, 'str:Styrke – let');
   assert.ok(!('dist' in r.writes.u02['1-1']));
   assert.equal(r.writes.u02['1-1'].hr, 104);
-  assert.deepEqual(r.stats, { window: 7, matched: 6, healed: 0, occupied: 0, extras: 1, known: 0 });
+  assert.deepEqual(r.stats, { window: 7, matched: 6, healed: 0, occupied: 0, extras: 1, skipped: 0, known: 0 });
+  assert.equal(r.ledger['11111111104'].k, walk, 'gåturen er bogført under ekstra-nøglen');
+});
+
+test('ekstra: nøglen afledes af aktivitets-id\'et, er gyldig, og posten er en fast, gyldig Extra uden private felter', () => {
+  const k = extraKeyFor('11111111104');
+  assert.match(k, /^x-s[a-z0-9]+$/);
+  assert.ok(isExtraKey(k) && isExtraKey(extraKeyFor('99999999999999999999')) && isExtraKey(extraKeyFor('1')));
+  assert.notEqual(extraKeyFor('11111111104'), extraKeyFor('11111111105'));
+  assert.equal(extraKeyFor('11111111104'), k, 'stabil');
+  const outside = run([raw({ id: 11111111104, type: 'Run', start: '2026-11-10T16:00:00Z', elapsed: 600 })], { weeks: custom([sess('swim', 'Svøm', 30)]), today: '2026-11-10' });
+  assert.deepEqual(outside.writes, {}, 'en dato uden for planen har ingen ugefil at stå i');
+  const day = matchActivities({ weeks: custom([sess('swim', 'Svøm', 30)]), progress: {}, ledger: {}, today: '2026-11-02', lookbackDays: 1, activities: picked([raw({ id: 11111111104, type: 'Run', start: '2026-11-02T06:00:00Z', elapsed: 600, dist: 2100.4, hr: 151 })]) });
+  const e = day.writes.u02[k];
+  assert.deepEqual(e, { day: 0, sport: 'run', min: 10, dist: 2100, hr: 151, source: 'strava', activityId: '11111111104', updatedAt: '2026-11-02T06:10:00.000Z', dev: 'strava' });
+  assert.deepEqual(normalizeExtra(e), e, 'fast punkt af normalizeExtra');
+  const file = serializeWeek('u02', day.writes.u02);
+  assert.deepEqual(parseWeekFile('u02.json', file).week, day.writes.u02);
+  for (const d of DECOYS) assert.ok(!(file + JSON.stringify(day.ledger)).includes(d), d);
 });
 
 // ---- Matchning ----
@@ -242,14 +262,16 @@ test('flest mulige par slår den billigste parring: en aktivitet der kun passer 
   assert.deepEqual(Object.keys(small.writes.u02), ['0-0']);
 });
 
-test('aktiviteter under 5 minutter eller under 25 % af passet ignoreres og tælles som ekstra', () => {
+test('aktiviteter under 5 minutter ignoreres; under 25 % af passet er ikke et pas, men en ekstra', () => {
   const r = run([
     raw({ id: 81, type: 'Run', start: '2026-11-07T10:05:00Z', elapsed: 4 * 60 }),          // 4 min: for kort, selv om passet (brick, 10 min) ville tillade det
     raw({ id: 82, type: 'Run', start: '2026-11-08T10:05:00Z', elapsed: 11 * 60 }),         // søndag: langt løb på 45 min, 11 min = 24 %
   ]);
-  assert.deepEqual(r.writes, {});
-  assert.equal(r.stats.extras, 2);
-  assert.deepEqual(r.ledger, {});
+  assert.deepEqual(Object.keys(flat(r.writes)), [`u02.${extraKeyFor('82')}`], 'kun de 11 min bliver en ekstra; de 4 min er ignoreret');
+  assert.equal(r.writes.u02[extraKeyFor('82')].min, 11);
+  assert.equal(r.writes.u02[extraKeyFor('82')].sport, 'run');
+  assert.deepEqual(r.stats, { window: 2, matched: 0, healed: 0, occupied: 0, extras: 1, skipped: 1, known: 0 });
+  assert.deepEqual(Object.keys(r.ledger), ['82'], 'den ignorerede aktivitet bogføres ikke, ekstraen gør');
   const ok = run([raw({ id: 83, type: 'Run', start: '2026-11-08T10:05:00Z', elapsed: 12 * 60 })]); // 27 %
   assert.equal(ok.writes.u02['6-0'].extId, '83');
   const exactly = matchActivities({ weeks: custom([sess('run', 'Løb', 48)]), progress: {}, ledger: {}, today: '2026-11-02', lookbackDays: 1,
@@ -257,23 +279,30 @@ test('aktiviteter under 5 minutter eller under 25 % af passet ignoreres og tæll
   assert.equal(exactly.writes.u02['0-0'].min, 12);
 });
 
-test('ukendte sportstyper og dage uden pas i gruppen er ekstra', () => {
+test('ukendte sportstyper og dage uden pas i gruppen bliver ekstra (ukendt sport = other), med den rigtige dag', () => {
   const r = run([
     raw({ id: 91, type: 'Walk', start: '2026-11-08T09:00:00Z', elapsed: 3000 }),
     raw({ id: 92, type: 'EBikeRide', start: '2026-11-06T09:00:00Z', elapsed: 3000 }),
     raw({ id: 93, type: 'Swim', start: '2026-11-08T09:00:00Z', elapsed: 3000 }),           // søndag har kun et løb
   ]);
-  assert.deepEqual(r.writes, {});
-  assert.deepEqual(r.stats, { window: 3, matched: 0, healed: 0, occupied: 0, extras: 3, known: 0 });
+  assert.deepEqual(r.stats, { window: 3, matched: 0, healed: 0, occupied: 0, extras: 3, skipped: 0, known: 0 });
+  assert.deepEqual(Object.keys(r.writes), ['u02']);
+  const w = r.writes.u02;
+  assert.deepEqual(Object.keys(w).sort(), ['91', '92', '93'].map(extraKeyFor).sort());
+  assert.deepEqual([w[extraKeyFor('91')].sport, w[extraKeyFor('91')].day], ['other', 6]);
+  assert.deepEqual([w[extraKeyFor('92')].sport, w[extraKeyFor('92')].day], ['other', 4]);
+  assert.deepEqual([w[extraKeyFor('93')].sport, w[extraKeyFor('93')].day, w[extraKeyFor('93')].min], ['swim', 6, 50]);
+  assert.deepEqual(Object.keys(r.ledger).sort(), ['91', '92', '93']);
 });
 
-test('højst 6 aktiviteter pr. gruppe og dag; resten er ekstra', () => {
+test('højst 6 aktiviteter pr. gruppe og dag går til parring; resten er ekstra, og alle bliver gemt', () => {
   const list = Array.from({ length: 8 }, (_, i) => raw({ id: 100 + i, type: 'Run', start: `2026-11-08T0${i}:00:00Z`, elapsed: 50 * 60 }));
   const r = run(list);
-  assert.equal(Object.keys(flat(r.writes)).length, 1);
+  assert.equal(Object.keys(flat(r.writes)).length, 8, 'ét pas og 7 ekstra');
   assert.equal(r.stats.matched, 1);
   assert.equal(r.stats.extras, 7);
   assert.equal(r.writes.u02['6-0'].extId, '100', 'den første i starttid-orden, ved uafgjort');
+  assert.equal(Object.keys(r.writes.u02).filter(isExtraKey).length, 7);
 });
 
 test('triatlon-løb: alle dagens svøm-, cykel- og løbeaktiviteter samles i ét pas med sammenføjet extId', () => {
@@ -287,24 +316,27 @@ test('triatlon-løb: alle dagens svøm-, cykel- og løbeaktiviteter samles i ét
   ];
   const r = matchActivities({ weeks, progress: {}, activities: picked(legs), ledger: {}, today: day, lookbackDays: 1 });
   const key = keyOf('u33', 'Køge Jernmand');
-  assert.deepEqual(r.writes, { u33: { [key]: {
+  assert.deepEqual(r.writes.u33[key], {
     done: true, updatedAt: '2027-06-13T13:38:20.000Z', dev: 'strava', at: '2027-06-13T05:30:00.000Z', min: 347,
     src: 'strava', extId: '301,302,303', sig: 'race:Køge Jernmand', dist: 113101,
-  } } });
+  });
+  assert.deepEqual(Object.keys(r.writes.u33).sort(), [key, extraKeyFor('304')].sort());
   assert.ok(!('hr' in r.writes.u33[key]), 'ingen puls på et løb af flere aktiviteter');
-  assert.deepEqual(Object.keys(r.ledger).sort(), ['301', '302', '303']);
-  assert.ok(Object.values(r.ledger).every(l => l.w === 'u33' && l.k === key && l.d === day));
+  assert.deepEqual(Object.keys(r.ledger).sort(), ['301', '302', '303', '304']);
+  assert.ok(['301', '302', '303'].every(id => r.ledger[id].w === 'u33' && r.ledger[id].k === key && r.ledger[id].d === day));
+  assert.equal(r.ledger['304'].k, extraKeyFor('304'));
   assert.equal(r.stats.matched, 1);
   assert.equal(r.stats.extras, 1, 'gåturen');
+  assert.deepEqual(r.writes.u33[extraKeyFor('304')], { day: 6, sport: 'other', min: 15, source: 'strava', activityId: '304', updatedAt: '2027-06-13T14:15:00.000Z', dev: 'strava' });
   assert.deepEqual(normalizeEntry(r.writes.u33[key]), r.writes.u33[key]);
 });
 
 test('triatlon-løb: kun 25 % eller mere tæller som gennemført, ellers ingen skrivning og ingen hovedbog; extId kortes til 3 id\'er', () => {
   const day = '2027-06-13';
   const short = matchActivities({ weeks, progress: {}, ledger: {}, today: day, lookbackDays: 1, activities: picked([raw({ id: 311, type: 'Swim', start: '2027-06-13T05:30:00Z', elapsed: 80 * 60 })]) });
-  assert.deepEqual(short.writes, {});
+  assert.deepEqual(short.writes, {}, 'en løbsdag der ikke når 25 %: ingen pas og ingen ekstra, så en senere kørsel kan fuldføre løbet');
   assert.deepEqual(short.ledger, {});
-  assert.equal(short.stats.extras, 1);
+  assert.deepEqual([short.stats.extras, short.stats.skipped], [0, 1]);
   const enough = matchActivities({ weeks, progress: {}, ledger: {}, today: day, lookbackDays: 1, activities: picked([raw({ id: 312, type: 'Ride', start: '2027-06-13T05:30:00Z', elapsed: 83 * 60 })]) });
   assert.equal(enough.writes.u33['6-0'].min, 83, '83 min ≥ 82,5 min');
 
@@ -426,10 +458,16 @@ test('en anden kørsel med de samme data giver 0 skrivninger og uændret hovedbo
   const second = matchActivities({ weeks, progress, activities: acts, ledger: first.ledger, today: '2026-11-08', lookbackDays: 7 });
   assert.deepEqual(second.writes, {});
   assert.deepEqual(second.ledger, first.ledger);
-  assert.deepEqual(second.stats, { window: 7, matched: 0, healed: 0, occupied: 0, extras: 1, known: 6 });
+  assert.deepEqual(second.stats, { window: 7, matched: 0, healed: 0, occupied: 0, extras: 0, skipped: 0, known: 7 }, 'også gåturen (en ekstra) er allerede hentet');
   // uden hovedbog: id'erne står i extId på pasene, så det samme gælder
   const viaExtId = matchActivities({ weeks, progress, activities: acts, ledger: {}, today: '2026-11-08', lookbackDays: 7 });
   assert.deepEqual(viaExtId.writes, {});
+  // en slettet ekstra (gravsten) kommer ikke tilbage, heller ikke med tom hovedbog, og de ekstra der står der, bliver ikke ændret
+  const walk = extraKeyFor('11111111104');
+  const deleted = apply(progress, { u02: { [walk]: { deleted: true, updatedAt: '2026-11-08T12:00:00.000Z', dev: 'deva0001' } } });
+  const again = matchActivities({ weeks, progress: deleted, activities: acts, ledger: {}, today: '2026-11-08', lookbackDays: 7 });
+  assert.deepEqual(again.writes, {}, 'gravstenen står ved magt');
+  assert.equal(again.stats.extras, 0);
   // og de rå input er urørte
   const snap = JSON.stringify([progress, first.ledger]);
   matchActivities({ weeks, progress, activities: acts, ledger: first.ledger, today: '2026-11-08', lookbackDays: 7 });
@@ -489,4 +527,51 @@ test('hovedbogen beskæres: poster ældre end 30 dage forsvinder, poster på gr�
   assert.deepEqual(at('2027-01-01'), ['3'], 'i dag − 30 d = 2. dec.');
   assert.deepEqual(at('2027-01-07'), ['3'], 'i dag − 30 d = 8. dec.: 8. dec. bliver');
   assert.deepEqual(at('2027-01-08'), [], 'i dag − 30 d = 9. dec.: alt er ældre');
+});
+
+// ---- Ekstra (uplanlagt træning) og hovedbogen ----
+
+test('ekstra: selvheling skriver en tabt ekstra igen, dropper den hvis aktiviteten ikke længere hentes, og lader en gravsten stå', () => {
+  const acts = picked([raw({ id: 551, type: 'Walk', start: '2026-11-08T09:00:00Z', elapsed: 3000 })]);
+  const k = extraKeyFor('551');
+  const first = matchActivities({ weeks, progress: {}, activities: acts, ledger: {}, today: '2026-11-08', lookbackDays: 7 });
+  assert.deepEqual(first.ledger, { 551: { d: '2026-11-08', w: 'u02', k } });
+  const healed = matchActivities({ weeks, progress: { u02: { '1-0': { done: true, updatedAt: '2026-11-03T08:00:00.000Z' } } }, activities: acts, ledger: first.ledger, today: '2026-11-08', lookbackDays: 7 });
+  assert.deepEqual(healed.writes, { u02: { [k]: first.writes.u02[k] } }, 'samme post som første gang');
+  assert.deepEqual([healed.stats.healed, healed.stats.extras], [1, 0]);
+  assert.deepEqual(healed.ledger, first.ledger);
+  const gone = matchActivities({ weeks, progress: {}, activities: [], ledger: first.ledger, today: '2026-11-08', lookbackDays: 7 });
+  assert.deepEqual([gone.writes, gone.ledger], [{}, {}]);
+  const tomb = { deleted: true, updatedAt: '2026-11-08T12:00:00.000Z', dev: 'k3f9a2c1' };
+  const kept = matchActivities({ weeks, progress: { u02: { [k]: tomb } }, activities: acts, ledger: first.ledger, today: '2026-11-08', lookbackDays: 7 });
+  assert.deepEqual(kept.writes, {});
+  assert.deepEqual(kept.ledger, first.ledger);
+  assert.equal(kept.stats.healed, 0);
+  const wrongWeek = matchActivities({ weeks, progress: {}, activities: acts, ledger: { 551: { d: '2026-11-08', w: 'u03', k } }, today: '2026-11-08', lookbackDays: 7 });
+  assert.deepEqual(wrongWeek.ledger, {}, 'en hovedbogspost der peger på en anden uge end aktivitetens, droppes');
+});
+
+test('ekstra: en blokeret (ulæselig) uge får ingen ekstra, og en aktivitet der hører til et optaget pas bliver ikke også en ekstra', () => {
+  const walk = raw({ id: 561, type: 'Walk', start: '2026-11-08T09:00:00Z', elapsed: 3000 });
+  const blocked = run([walk], { blocked: ['u02'] });
+  assert.deepEqual(blocked.writes, {});
+  assert.deepEqual(blocked.ledger, {});
+  assert.deepEqual([blocked.stats.extras, blocked.stats.skipped], [0, 1]);
+  // søndagens løb er allerede ført manuelt: aktiviteten absorberes af det pas, og der kommer ingen ekstra
+  const manual = { done: true, updatedAt: '2026-11-08T20:00:00.000Z', min: 50 };
+  const occupied = run([raw({ id: 562, type: 'Run', start: '2026-11-08T09:00:00Z', elapsed: 2700 })], { progress: { u02: { '6-0': manual } } });
+  assert.deepEqual(occupied.writes, {});
+  assert.equal(occupied.stats.occupied, 1);
+  assert.equal(occupied.stats.extras, 0);
+});
+
+test('ekstra: en manuel ekstra (uden activityId) forstyrrer ikke, og to ens aktiviteter samme dag får hver deres nøgle', () => {
+  const manual = { day: 6, sport: 'run', min: 30, source: 'manual', updatedAt: '2026-11-08T08:00:00.000Z', dev: 'deva0001' };
+  const r = run([
+    raw({ id: 571, type: 'Walk', start: '2026-11-08T09:00:00Z', elapsed: 1800 }),
+    raw({ id: 572, type: 'Walk', start: '2026-11-08T09:00:00Z', elapsed: 1800 }),
+  ], { progress: { u02: { 'x-manuel1': manual } } });
+  assert.deepEqual(Object.keys(r.writes.u02).sort(), [extraKeyFor('571'), extraKeyFor('572')].sort());
+  assert.equal(r.stats.extras, 2);
+  assert.ok(!('x-manuel1' in r.writes.u02), 'den manuelle ekstra røres ikke');
 });

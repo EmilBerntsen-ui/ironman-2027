@@ -7,9 +7,9 @@ import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FORMAT, META_FILE, mergeWeek, parseAny, parseWeekFile, serializeWeek } from '../src/progress.js';
+import { FORMAT, META_FILE, isExtraKey, mergeWeek, parseAny, parseWeekFile, serializeWeek } from '../src/progress.js';
 import { STATE_FILE, decryptToken, encryptToken, fingerprint, main, parseState, serializeState, syncStrava } from '../scripts/strava-sync.mjs';
-import { listActivities, validBase, UsageError, matchActivities, pickActivity } from '../scripts/lib/strava.mjs';
+import { extraKeyFor, listActivities, validBase, UsageError, matchActivities, pickActivity } from '../scripts/lib/strava.mjs';
 import { plan } from '../src/plan.js';
 
 const SCRIPT = fileURLToPath(new URL('../scripts/strava-sync.mjs', import.meta.url));
@@ -24,6 +24,7 @@ const SEED = TOK.seed.refresh_token, ROT1 = TOK.rot1.refresh_token, ROT2 = TOK.r
 const NOW = new Date('2026-11-08T20:30:00Z'); // søndag aften; vinduet er 7 dage tilbage (1.–8. nov.)
 const DECOYS = ['HEMMELIG', 'POLYLINE', '55.6761', '12.5683', '99887766'];
 const ACTIVITY_IDS = fixture('activities-week2.json').map(a => String(a.id));
+const WALK_ID = '11111111104'; // gåturen: ingen pas, så den gemmes som ekstra (x-s<id>)
 const ALL_SECRETS = [SEED, ROT1, ROT2, TOK.seed.access_token, TOK.rot1.access_token, TOK.rot2.access_token, CLIENT_SECRET, GIST_ID, GIST_TOKEN];
 
 // ---- Falsk verden: Gist og Strava i hukommelsen. handle(side, req) er fælles for HTTP-serveren og fetch-faken. ----
@@ -169,7 +170,7 @@ test('CLI, glad vej: PATCH kun de ændrede ugefiler plus _strava.json, verify-GE
   const r = await cli();
   assert.equal(r.code, 0, r.text);
   assert.equal(r.status, 'status=ok');
-  assert.match(r.stdout, /^Strava: 7 aktiviteter i vinduet · 6 nye pas · 0 genskabt · 0 optaget \(manuel\/fjernet\) · 1 uden plan$/m);
+  assert.match(r.stdout, /^Strava: 7 aktiviteter i vinduet · 6 nye pas · 0 genskabt · 0 optaget \(manuel\/fjernet\) · 1 ekstra$/m);
   const patches = world.patches();
   assert.equal(patches.length, 1, 'ét PATCH: ingen rotation');
   assert.deepEqual(Object.keys(patches[0].files).sort(), [STATE_FILE, 'u01.json', 'u02.json'], 'u03 og markørfilen røres ikke');
@@ -177,7 +178,8 @@ test('CLI, glad vej: PATCH kun de ændrede ugefiler plus _strava.json, verify-GE
   assert.equal(world.count('strava', 'POST'), 1);
   assert.deepEqual(world.requests.filter(q => q.side === 'strava' && q.method === 'GET').map(q => q.path), ['/api/v3/athlete/activities'], 'ingen detalje-endpoints');
   const u02 = world.week('u02');
-  assert.deepEqual(Object.keys(u02).sort(), ['1-1', '2-0', '3-0', '4-0', '5-0', '5-1']);
+  assert.deepEqual(Object.keys(u02).sort(), ['1-1', '2-0', '3-0', '4-0', '5-0', '5-1', extraKeyFor(WALK_ID)]);
+  assert.deepEqual(u02[extraKeyFor(WALK_ID)], { day: 6, sport: 'other', min: 38, source: 'strava', activityId: WALK_ID, updatedAt: '2026-11-08T09:40:00.000Z', dev: 'strava' });
   assert.equal(u02['3-0'].note, 'HEMMELIG-NOTE', 'det manuelle pas er urørt (gisten er privat; noten må være der)');
   assert.equal(u02['4-0'].src, 'strava');
   assert.equal(u02['4-0'].dev, 'strava');
@@ -185,17 +187,38 @@ test('CLI, glad vej: PATCH kun de ændrede ugefiler plus _strava.json, verify-GE
   assert.deepEqual(Object.keys(world.week('u01')), ['6-0']);
   assert.deepEqual(world.week('u03'), { '1-0': manual('2026-11-10T08:00:00.000Z') });
   const st = world.state();
-  assert.deepEqual(Object.keys(st.seen).sort(), ACTIVITY_IDS.filter(id => id !== '11111111104' && id !== '11111111108').sort());
+  assert.deepEqual(Object.keys(st.seen).sort(), ACTIVITY_IDS.sort(), 'alle, også gåturen (en ekstra)');
+  assert.equal(st.seen[WALK_ID].k, extraKeyFor(WALK_ID));
   assert.equal(st.seen['11111111101'].w, 'u02');
   assert.equal(decryptToken(st.rt, CLIENT_SECRET), SEED);
   assertClean(r.text, 'glad vej');
   // en anden kørsel: 0 skrivninger, 0 nye pas
   const again = await cli();
   assert.equal(again.code, 0, again.text);
-  assert.match(again.stdout, /· 0 nye pas · 0 genskabt · 0 optaget \(manuel\/fjernet\) · 1 uden plan · 6 allerede hentet/);
+  assert.match(again.stdout, /· 0 nye pas · 0 genskabt · 0 optaget \(manuel\/fjernet\) · 0 ekstra · 7 allerede hentet/);
   assert.equal(world.patches().length, 1, 'ingen nye skrivninger');
   assert.equal(world.count('gist', 'GET'), 3, 'kun den indledende hentning');
   assertClean(again.text, 'anden kørsel');
+});
+
+test('ekstra fra Strava: en slettet ekstra (gravsten fra appen) kommer ikke tilbage, og en tabt ekstra skrives igen', async () => {
+  seedState(world);
+  assert.equal((await sync(world)).r.status, 'ok');
+  const key = extraKeyFor(WALK_ID);
+  assert.equal(world.week('u02')[key].source, 'strava');
+  // appen sletter den (gravsten), og næste kørsel rører den ikke
+  setWeek(world, 'u02', { ...world.week('u02'), [key]: { deleted: true, updatedAt: '2026-11-08T21:00:00.000Z', dev: 'deva0001' } });
+  const before = world.patches().length;
+  const again = await sync(world);
+  assert.equal(again.r.status, 'ok');
+  assert.equal(world.patches().length, before, 'ingen skrivninger');
+  assert.deepEqual(world.week('u02')[key], { deleted: true, updatedAt: '2026-11-08T21:00:00.000Z', dev: 'deva0001' });
+  // en enhed overskriver ugen uden ekstraen (en gammel app uden x-nøgler): hovedbogen kender den, så den skrives igen
+  const { [key]: _gone, ...rest } = world.week('u02');
+  setWeek(world, 'u02', rest);
+  const healed = await sync(world);
+  assert.match(healed.text, /· 1 genskabt ·/);
+  assert.equal(world.week('u02')[key].activityId, WALK_ID);
 });
 
 test('første kørsel uden _strava.json gemmer tokenet (ét PATCH med kun _strava.json) før aktiviteterne hentes', async () => {
@@ -228,7 +251,7 @@ test('rotation: det nye token gemmes krypteret og dukker op på næste kørsel; 
   assert.deepEqual(world.strava.tokenCalls.map(c => c.refresh_token), [SEED, ROT1]);
   st = world.state();
   assert.equal(decryptToken(st.rt, CLIENT_SECRET), ROT2);
-  assert.deepEqual(Object.keys(st.seen).length, 6, 'hovedbogen er bevaret');
+  assert.deepEqual(Object.keys(st.seen).length, 7, 'hovedbogen er bevaret');
   assertClean(first.text + second.text, 'rotation');
 });
 
@@ -276,7 +299,7 @@ test('en korrupt eller fremmed _strava.json behandles som tom tilstand med en ad
     assert.equal(r.status, 'ok');
     assert.match(text, /::warning::Strava-tilstanden i gisten kunne ikke læses/);
     assert.equal(w.state().base, fingerprint(SEED), 'overskrevet med gyldig tilstand');
-    assert.equal(Object.keys(w.state().seen).length, 6);
+    assert.equal(Object.keys(w.state().seen).length, 7);
   }
 });
 
@@ -287,6 +310,8 @@ test('tilstandsfilen: rundtur, hovedbogen valideres, og felterne sorteres stabil
   assert.equal(text, serializeState(parseState(text)));
   const dirty = parseState(JSON.stringify({ format: 'ironman-2027-strava', v: 1, rt: { iv: 1 }, base: 'ikke-hex', seen: { abc: { d: '2026-11-24', w: 'u05', k: '1-0' }, 5: { d: 'i går', w: 'u05', k: '1-0' }, 6: { d: '2026-11-24', w: '../x', k: '1-0' }, 7: { d: '2026-11-24', w: 'u05', k: '9-0' }, 8: { d: '2026-11-24', w: 'u05', k: '1-0' } } }));
   assert.deepEqual(dirty, { rt: null, base: null, seen: { 8: { d: '2026-11-24', w: 'u05', k: '1-0' } } });
+  const withExtra = parseState(JSON.stringify({ format: 'ironman-2027-strava', v: 1, rt: null, base: null, seen: { 1: { d: '2026-11-24', w: 'u05', k: 'x-s1abc' }, 2: { d: '2026-11-24', w: 'u05', k: 'x-' }, 3: { d: '2026-11-24', w: 'u05', k: 'x-ABC' } } }));
+  assert.deepEqual(withExtra.seen, { 1: { d: '2026-11-24', w: 'u05', k: 'x-s1abc' } }, 'hovedbogen kan pege på en ekstra (x-<id>)');
   assert.equal(parseState('[]'), null);
 });
 
@@ -543,7 +568,7 @@ test('tabt opdatering: en enhed overskriver ugen mellem vores PATCH og efterprø
   assert.equal(world.patches().length, 2, 'første PATCH + gendannelse');
   assert.deepEqual(Object.keys(world.patches()[1].files), ['u02.json'], 'kun den tabte uge sendes igen');
   const u02 = world.week('u02');
-  assert.deepEqual(Object.keys(u02).sort(), ['1-1', '2-0', '3-0', '3-1', '4-0', '5-0', '5-1']);
+  assert.deepEqual(Object.keys(u02).sort(), ['1-1', '2-0', '3-0', '3-1', '4-0', '5-0', '5-1', extraKeyFor(WALK_ID)]);
   assert.deepEqual(u02['3-1'], deviceEdit, 'enhedens redigering bevaret');
   assert.equal(u02['4-0'].src, 'strava');
   assert.equal(world.count('gist', 'GET'), 3, 'hent + to efterprøvelser');
@@ -586,16 +611,22 @@ test('privatliv: hverken stdout, stderr, $GITHUB_OUTPUT eller noget PATCH-indhol
         const st = parseState(content);
         assert.ok(st, 'gyldig tilstand');
         content = JSON.stringify({ ...st, seen: Object.fromEntries(Object.values(st.seen).map((l, i) => [i, { ...l }])) });
-      } else { // ugefiler: ids kun i extId
+      } else { // ugefiler: ids kun i extId (pas) og activityId (ekstra)
         const week = parseWeekFile(name, content).week;
-        for (const e of Object.values(week)) { assert.match(e.extId, /^\d{1,20}$/); delete e.extId; }
+        for (const [k, e] of Object.entries(week)) {
+          const id = isExtraKey(k) ? e.activityId : e.extId;
+          assert.match(id, /^\d{1,20}$/);
+          delete e.extId; delete e.activityId;
+          if (isExtraKey(k)) assert.ok(!k.includes(id), 'nøglen er base36, ikke selve id\'et');
+        }
         content = JSON.stringify(week);
       }
       for (const s of [...ALL_SECRETS, ...DECOYS, ...ACTIVITY_IDS]) assert.ok(!content.includes(s), `${name}: ${s.slice(0, 12)}`);
     }
     // Kun de tilladte felter pr. pas
-    for (const [name, f] of Object.entries(p.files)) if (name !== STATE_FILE) for (const e of Object.values(parseWeekFile(name, f.content).week)) {
-      assert.ok(Object.keys(e).every(k => ['done', 'updatedAt', 'dev', 'at', 'min', 'src', 'extId', 'sig', 'dist', 'hr'].includes(k)), Object.keys(e).join());
+    for (const [name, f] of Object.entries(p.files)) if (name !== STATE_FILE) for (const [k, e] of Object.entries(parseWeekFile(name, f.content).week)) {
+      const allowed = isExtraKey(k) ? ['day', 'sport', 'min', 'source', 'activityId', 'updatedAt', 'dev', 'dist', 'hr'] : ['done', 'updatedAt', 'dev', 'at', 'min', 'src', 'extId', 'sig', 'dist', 'hr'];
+      assert.ok(Object.keys(e).every(f => allowed.includes(f)), Object.keys(e).join());
     }
   }
   // fejlsituationerne er rene, de også
@@ -758,7 +789,9 @@ test('de skrevne pas er gyldig fremdrift: parseAny læser gisten, og pas og ledg
   assert.deepEqual(parseAny({ format: FORMAT, v: 2, weeks: progress }), progress);
   const weeks = plan();
   for (const l of Object.values(world.state().seen)) {
-    const w = weeks.find(x => x.id === l.w), [di, si] = l.k.split('-').map(Number);
+    const w = weeks.find(x => x.id === l.w);
+    if (isExtraKey(l.k)) { assert.ok(w && progress[l.w][l.k], `${l.w} ${l.k}: ekstra findes i ugen`); continue; }
+    const [di, si] = l.k.split('-').map(Number);
     assert.ok(w.days[di][si], `${l.w} ${l.k} findes i planen`);
   }
   // et nyt match af de samme data mod den skrevne tilstand giver ingenting at gøre
