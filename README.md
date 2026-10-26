@@ -19,6 +19,7 @@ Projektet har ingen afhængigheder – kun Node (v20+). Arkitekturen er beskreve
 | --- | --- |
 | `src/plan.js` | Plandata (faser, uger, pas) + `plan()`, TSS-estimat og PMC-beregning. ES-modul, bruges både af Node og inlinet i siden. |
 | `src/progress.js` | Afkrydsninger og tider (skema v2): sammenfletning, validering og eksport. Ren logik, bruges i Node og i browseren. |
+| `src/pace.js` | Anbefalet fart pr. pas ud fra tre grundtal (løbetærskel, CSS og cykeltærskel), plus visning og tolerant indtastning af faktisk pace. Ren logik, bruges i Node og i browseren. |
 | `src/app.html`, `src/app.js`, `src/styles.css` | Siden: kalender, detaljevisning med log, præstationsgraf og guide. |
 | `src/ics.js` | Kalendereksport (RFC 5545). |
 | `build.mjs`, `build/` | Byggescript og mål: `artifact` (claude.ai) og `site` (GitHub Pages). |
@@ -47,7 +48,7 @@ Bemærk: Importerer du filen igen efter ændringer i planen, kan nogle apps lave
 
 ## Siden
 
-`dist/artifact/index.html` er bygget til at blive vist som et claude.ai-Artifact. Den gemmer afkrydsninger, faktisk tid, RPE og noter i Artifact-databasen (samling `progress`, ét dokument pr. uge `u01`…`u43`), så du kan se dem fra både telefon og computer. Åbnes filen uden for claude.ai, gemmes det kun i den browser (localStorage).
+`dist/artifact/index.html` er bygget til at blive vist som et claude.ai-Artifact. Den gemmer afkrydsninger, faktisk tid, faktisk pace, RPE og noter i Artifact-databasen (samling `progress`, ét dokument pr. uge `u01`…`u43`), så du kan se dem fra både telefon og computer. Åbnes filen uden for claude.ai, gemmes det kun i den browser (localStorage).
 
 `dist/site/` er den installerbare version til GitHub Pages, med synk via en GitHub Gist. Opsætningen står i [opsætningsguiden](docs/guides/opsaetning.md).
 
@@ -58,4 +59,5 @@ Bemærk: Importerer du filen igen efter ændringer i planen, kan nogle apps lave
 - Løbsdatoerne er tjekket i oktober 2026. Tilmelding til Køge Jernmand: sportstiming.dk/event/18710.
 - Eksamensugerne (uge 7–8 og 30–31) er antaget.
 - 10 km (uge 14) og halvmaraton (uge 26) er pladsholdere: find et lokalt løb.
+- Fartzonerne regnes ud fra tre forsigtige grundtal i `src/pace.js` (løbetærskel 5:45 /km, CSS 2:10 /100 m, cykeltærskel 29 km/t). De opdateres efter testugen i uge 5, og så flytter alle zoner sig med. Cykel vises kun i km/t; indendørs står der "efter følelse og kadence".
 - TSS er et groft estimat (minutter × intensitet² × 100/60), og start-CTL er sat til 25.

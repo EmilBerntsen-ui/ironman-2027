@@ -249,6 +249,7 @@ Why `updatedAt = activity end` and not the time of the CI run: a manual tick mad
 - When `e.src === 'strava'`, show one line under the facts: `Fra Strava · 10,2 km · ⌀ 148 bpm`, built with `esc()`/number formatting only.
 - Add a link `Se på Strava` → `https://www.strava.com/activities/<first id>`. Link only when the id matches `/^\d{1,20}$/`, and use `target=_blank rel="noopener noreferrer"`. A navigation is not affected by the CSP.
 - On submit, an edited entry whose previous entry had `src:'strava'` keeps `src, extId, dist, hr`, and the user's `min/rpe/note` override.
+- Pace (see architecture §3.8): for an entry with `dist` and `min` but no `pace`, the sheet and the card show a derived average (`⌀ 6:03 /km`), computed by `derivePace` in `src/pace.js` and used for display only. It is never written to the entry or the gist, and the importer's stored fields are unchanged. For swimming `min` is elapsed time, so the figure includes rests. A typed `pace` wins over the derived one and is kept when the entry is edited.
 
 **`src/ics.js`:** unchanged. It reads only `done` and `min`.
 

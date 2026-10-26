@@ -19,6 +19,7 @@ Assumed repo and URL: `github.com/EmilBerntsen-ui/ironman-2027` (public), served
 | CI/CD | Triggers: push to `main`, cron `17 2 * * *` and `17 20 * * *` (the second one is for Strava) and manual dispatch (input `strava_days`). Steps: test, Strava sync (see [strava.md](strava.md)), fetch gist, build, `deploy-pages`, then delete the Pages artifact |
 | ICS | `✅` for done sessions and nothing else: sessions that are not done, past or future, are unchanged (no mark for missed sessions). The marks need `GIST_ID` and `GIST_READ_TOKEN`. Only `done` and `min` are read. Served at the secret path `cal/<CAL_TOKEN>/ironman-2027.ics` |
 | Strava | The Action imports activities and writes `src:"strava"` entries into the gist, so sessions show as done without ticking. Spec in [strava.md](strava.md): personal API app, rotated refresh token stored encrypted in the gist (`_strava.json`), scope `activity:read` (`--read-all` for `activity:read_all`), a manual tick always wins. Only `dist`/`hr` are new fields, and the `.ics` ignores them |
+| Pace | Every planned session carries an explicit zone (`z`, optional `main`, `ind`, `legs`) in `plan.js`; nothing is parsed from the text. `src/pace.js` derives recommended pace ranges from three baselines (run threshold 5:45 /km, swim CSS 2:10 /100 m, bike threshold 29 km/h), shown in the sheet, on the cards, in the zone guide and in each `.ics` description. The log has an optional actual `pace` (§3.1). Bike is km/h only, and indoor sessions say "efter følelse og kadence". Details in §3.8 |
 | PWA | The whole shell is precached and served cache-first, versioned by content hash. The SW ignores `/cal/` and cross-origin requests. An update toast prompts the reload |
 
 ---
@@ -30,6 +31,7 @@ Assumed repo and URL: `github.com/EmilBerntsen-ui/ironman-2027` (public), served
 ```
 src/plan.js                 unchanged (plan data, TSS, PMC)
 src/progress.js             NEW  schema v2: pure logic, runs in Node and the browser
+src/pace.js                 NEW  recommended pace per zone, parsing and formatting of pace (pure logic, Node and browser)
 src/ics.js                  + completion marks
 src/app.html                body markup only (head moved to the shells)
 src/shell.artifact.html     NEW  title/meta/Google Fonts/<style>/<script> wrapper (no doctype/html/head/body)
@@ -76,12 +78,12 @@ export const TARGETS = {
   artifact: {
     shell: 'src/shell.artifact.html',
     css: ['src/styles.css', 'src/settings.css'],
-    js: ['src/plan.js', 'src/progress.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'],
+    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/store/local.js', 'src/store/artifact-db.js', 'src/settings.js', 'src/app.js'],
   },
   site: {
     shell: 'src/shell.site.html',
     css: ['src/fonts.css', 'src/styles.css', 'src/settings.css', 'src/pwa.css'],
-    js: ['src/plan.js', 'src/progress.js', 'src/store/local.js', 'src/store/gist.js', 'src/settings.js', 'src/app.js', 'src/pwa.js'],
+    js: ['src/plan.js', 'src/progress.js', 'src/pace.js', 'src/store/local.js', 'src/store/gist.js', 'src/settings.js', 'src/app.js', 'src/pwa.js'],
   },
 };
 export function bundleJs(files, { target, version }) /* → string */;
@@ -231,11 +233,12 @@ Changes to `app.js` (2b):
   "extId": "12345678901",                    // external activity id (Strava), string
   "sig": "run:Løbeintervaller",              // `${s.s}:${s.t}` of the planned session at log time
   "dist": 10234,                             // metres, integer 0..1,000,000 (Strava only; never in the .ics)
-  "hr": 148                                  // average heart rate, integer 30..250 (Strava only; never in the .ics)
+  "hr": 148,                                 // average heart rate, integer 30..250 (Strava only; never in the .ics)
+  "pace": 330                                // actual pace: sec/km (run), sec/100 m (swim) or km/h (bike); number 1..3600, one decimal; never in the .ics
 }
 ```
 
-- Tombstone: `{"done": false, "updatedAt": "…", "dev": "…"}`. All detail fields are dropped, `dist` and `hr` too.
+- Tombstone: `{"done": false, "updatedAt": "…", "dev": "…"}`. All detail fields are dropped, `dist`, `hr` and `pace` too.
 - Keys are unchanged from v1. `weekId` matches `/^u\d{2}$/`. `sessionKey` matches `/^[0-6]-\d{1,2}$/` (day with Monday = 0, then session index).
 
 ### 3.2 `src/progress.js` API
@@ -287,6 +290,7 @@ Validation in `normalizeEntry` runs on every remote byte before it reaches state
 - `src` must be a value of the enum.
 - Length limits: `extId` ≤ 64, `sig` ≤ 120, `dev` ≤ 16.
 - `dist` must be an integer 0..1,000,000 and `hr` an integer 30..250, otherwise the field is dropped.
+- `pace` must be a finite number 1..3600 (rounded to one decimal), otherwise the field is dropped. The unit follows from the session's sport (`src/pace.js`), so it needs no extra field. Schema v2 stays: entries without `pace` read as before, `pace` travels with the winning entry in the merge, and a client that does not know the field keeps it as an unknown primitive.
 - Unknown keys are kept only when the value is a primitive of ≤ 200 characters. This gives bounded forward compatibility.
 
 ### 3.4 Gist layout
@@ -371,6 +375,33 @@ Designed in [strava.md](strava.md). What this document fixes:
 - The fields `src`, `extId`, `min` and (new) `dist` and `hr`.
 - The rule: an importer creates entries only for sessions that have no `done:true` entry, and it never overwrites a done entry (manual or Strava). A Strava entry carries `updatedAt` = the activity's end, so a manual tick made after the workout wins last-writer-wins.
 - The gist gets one more file, `_strava.json`, which only CI writes (encrypted refresh token and an activity ledger). `parseWeekFile` only accepts `u\d\d.json`, so every existing reader ignores it.
+
+### 3.8 Pace: zones, recommended and actual
+
+Plan side (`src/plan.js`). Every session has an explicit zone, set where the session is built and never derived from its text:
+- `z`: the zone of the whole session (or its warm-up and cool-down): `easy` (Z1), `z2`, `im` (IM pace), `hm` (half-marathon pace), `tempo`, `ss` (sweet spot, bike), `thr` (threshold), `z4` (10 km pace), `css` (swim), `race`, `test`, `str`, `rest`.
+- `main`: the zone of the main set when it differs (`z: 'easy', main: 'thr'` for a run with threshold reps).
+- `ind`: bike sessions only. `true` = indoor (spinner), `'opt'` = indoor or outdoor.
+- `legs`: triathlon races only, `{ swim, bike, run }`.
+- Every non-rest, non-strength session must have a zone that has a range for its sport, or be a `test`. `test/pace.test.mjs` enforces it.
+
+Zones (`src/pace.js`). Three baselines, `BASELINES = { run: 345, swim: 130, bike: 29 }` (run threshold in sec/km, swim CSS in sec/100 m, bike threshold in km/h). They are conservative defaults, to be updated after the week-5 tests. Each zone is a range given as offsets from its baseline, so changing a baseline moves every zone, every card and every `.ics` line:
+
+| Zone | Run (/km) | Swim (/100 m) | Bike (km/h) |
+|---|---|---|---|
+| `easy` / `z2` | T+60…+90 (6:45–7:15) | C+10…+20 (ca. 2:25) | easy: under B−7 (22), z2: B−7…−4 (22–25) |
+| `im` | T+35…+50 (6:20–6:35) | C+5…+10 (2:15–2:20) | B−5…−3 (24–26) |
+| `hm` | T+10…+20 (5:55–6:05) | none | none |
+| `tempo` | T+5…+15 (5:50–6:00) | none | none |
+| `ss` | none | none | B−3…−1.5 (26–27.5) |
+| `thr` / `css` | T−5…+5 (5:40–5:50) | C−2…+2 (2:08–2:12) | B−1…+1 (28–30) |
+| `z4` | T−20…−10 (5:25–5:35) | none | none |
+
+(T, C and B are the three baselines. Bike bounds round to 0.5 km/h.)
+
+Display. `paceText(session)` gives `Anbefalet: 6:45–7:15 /km · hovedsæt 5:40–5:50 /km`. It replaces the old intensity fact in the sheet, and the same text is a line in every `.ics` description. `paceCompact` is the short form on the cards. Bike is shown in km/h only. A bike session with `ind: true` says `efter følelse og kadence` instead, because km/h means nothing on a spinner; with `ind: 'opt'` both are shown. Tests say `hård og jævn indsats, notér resultatet`, and strength and rest have no pace. The zone guide in `app.html` is generated from the same table (`guideRows`). `intensity()` and `tss()` stay in `plan.js` for the PMC chart, but the intensity factor is no longer displayed.
+
+Actual pace. The log form has `Faktisk pace`: run `mm:ss` per km, swim `mm:ss` per 100 m, bike km/h. `parsePace` is tolerant (`5:30`, `5.30`, `5,30`, `27,5`, with or without a unit). The value is stored as `pace` (§3.1). The sheet and the card show it and compare it with the recommended range: `hurtigere end anbefalet`, `i zonen` or `langsommere end anbefalet` (for run and swim a lower number is faster). A session with a main set is compared with the main-set zone, since a typed pace is read as the main-set pace. Strength, rest, indoor bike and triathlon races have no pace field. The compliance colour of a card is still decided by duration only. An entry without `pace` but with `dist` and `min` (Strava, [strava.md](strava.md) §5) gets a derived average shown as `⌀ 6:03 /km`. It is never stored, and it is not compared when the session has a main set, because the average includes warm-up and cool-down.
 
 ---
 
@@ -568,7 +599,8 @@ The signature becomes `buildIcs(weeks, now = new Date(), { progress = null, sche
 There is deliberately no mark for missed sessions: the calendar only ever shows what was done.
 
 - `UID`, `DTSTART` and `DURATION` stay unchanged, so clients update events in place.
-- Only `done` and `min` are read.
+- Only `done` and `min` are read from `progress`.
+- Every description also has a line `Anbefalet: …` (recommended pace, §3.8) before the week line. It comes from the plan alone, never from `progress`, so it is the same with and without marks. Strength sessions have none.
 - With `progress = null` the output is byte-identical to today's, and `test/plan.test.mjs` stays green.
 - Add `X-PUBLISHED-TTL:PT6H` and change `REFRESH-INTERVAL` to `PT6H`.
 
