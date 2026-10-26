@@ -375,3 +375,85 @@ test('vægt: den forlader aldrig enheden. Ingen gist-fil, ingen anmodning til Gi
     store.dispose();
   });
 });
+
+// ---- Indlejret i en fane (container i stedet for dialog) ----
+
+function mountInline(env, store, extra = {}) {
+  const container = env.doc.createElement('div');
+  env.doc.body.append(container);
+  const calls = [];
+  const ui = mountSettings({ store, target: 'site', version: 'test', gist: fakeGistClass(), container, onReveal: o => calls.push(o), ...extra });
+  return { ui, container, calls };
+}
+
+test('container: indstillingerne tegnes i containeren uden dialog, uden åbne-knapper og uden dialogens topbjælke og versionslinje', async () => {
+  await withBrowser({}, async env => {
+    env.storage.setItem(WEIGHT_KEY, '72.5');
+    const { ui, container } = mountInline(env, fakeStore('local'));
+    assert.ok(ui, 'openButton er valgfri, når der er en container');
+    assert.equal(env.doc.body.find(e => e.tag === 'dialog'), null, 'ingen dialog');
+    assert.ok(container.byId('setToken'), 'forbind GitHub (site, lokal Store)');
+    assert.equal(container.byId('setWeight').value, '72,5');
+    assert.ok(container.buttons('Gem vægt')[0] && container.buttons('Eksportér')[0] && container.buttons('Importér')[0]);
+    assert.doesNotMatch(container.textContent, /Version test/);
+    assert.equal(container.find(e => e.className.split(' ').includes('sh-top')), null);
+    assert.equal(container.find(e => e.tag === 'button' && e.attrs['aria-label'] === 'Luk'), null);
+    assert.equal(mountSettings({ store: fakeStore('local'), target: 'site' }), null, 'uden container og knapper er der intet at montere');
+  });
+});
+
+test('container: open() viser fanen via onReveal og lægger først da markøren i vægtfeltet; open() alene flytter ikke fokus', async () => {
+  await withBrowser({}, async env => {
+    const button = env.doc.createElement('button');
+    const { ui, container, calls } = mountInline(env, fakeStore('local'), { openButton: button });
+    assert.equal(button.getAttribute('aria-haspopup'), null, 'knappen navigerer, den åbner ingen dialog');
+    button.click();
+    assert.deepEqual(calls, [{ focusWeight: false }]);
+    assert.equal(env.doc.activeElement, null);
+    ui.open({ focusWeight: true });
+    assert.deepEqual(calls[1], { focusWeight: true });
+    assert.equal(env.doc.activeElement, container.byId('setWeight'));
+    ui.close(); // ingen dialog at lukke
+  });
+});
+
+test('container: vægt gemmes som i dialogen, og syncWeight henter en ændring fra en anden fane uden at overskrive det man skriver', async () => {
+  await withBrowser({}, async env => {
+    const weights = [];
+    const { ui, container } = mountInline(env, fakeStore('artifact'), { onWeight: kg => weights.push(kg) });
+    container.byId('setWeight').value = '70';
+    container.buttons('Gem vægt')[0].click();
+    assert.equal(env.storage.getItem(WEIGHT_KEY), '70');
+    assert.deepEqual(weights, [70]);
+    env.storage.setItem(WEIGHT_KEY, '81.5'); // en anden fane
+    ui.syncWeight();
+    assert.equal(container.byId('setWeight').value, '81,5');
+    container.byId('setWeight').value = '8';
+    env.doc.activeElement = container.byId('setWeight');
+    env.storage.setItem(WEIGHT_KEY, '90');
+    ui.syncWeight();
+    assert.equal(container.byId('setWeight').value, '8', 'mens man skriver, bliver feltet i fred');
+  });
+});
+
+test('container: følger Storen (setStore), tegner token-feltet når status bliver auth, og dispose rydder containeren', async () => {
+  await withBrowser({}, async env => {
+    const local = fakeStore('local', { label: 'Gemmes kun på denne enhed' });
+    const { ui, container } = mountInline(env, local);
+    assert.match(container.textContent, /Gemmes kun på denne enhed/);
+    const gist = fakeStore('gist', { label: 'Synkroniseret' });
+    ui.setStore(gist);
+    assert.equal(local.subs.size, 0);
+    assert.match(container.textContent, /Forbundet til GitHub/);
+    assert.equal(container.byId('setToken'), null);
+    gist.emit({ state: 'auth', label: 'Forbind GitHub igen', detail: 'Tokenet blev afvist' });
+    assert.ok(container.byId('setToken'), 'et felt til et nyt token, uden at fanen skulle åbnes først');
+    assert.match(container.textContent, /Tokenet blev afvist/);
+    gist.emit({ state: 'ready', label: 'Synkroniseret', detail: '' });
+    assert.equal(container.byId('setToken'), null);
+    ui.dispose();
+    assert.equal(gist.subs.size, 0);
+    assert.equal(container.children.length, 0);
+    assert.ok(env.doc.body.children.includes(container), 'containeren er sidens og fjernes ikke');
+  });
+});

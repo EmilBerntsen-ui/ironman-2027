@@ -31,17 +31,22 @@ const weeksOf = n => `${n} ${n === 1 ? 'uge' : 'uger'}`;
 // openButton: knappen (eller en liste af knapper) der åbner dialogen: statuslinjen og "Indstillinger"-knappen i headeren.
 // onWeight(kg|null): kaldes, når vægten er gemt (null = fjernet). Vægten er personlig og bor kun i localStorage på enheden (src/nutrition.js),
 // aldrig i Store'en, så den hverken synkroniseres, eksporteres eller kommer i kalenderen.
-// → { open({ focusWeight }), close(), setStore(next), dispose() }. open({ focusWeight: true }) åbner dialogen med markøren i vægtfeltet. setStore skifter Store (fx fra LocalStore til ArtifactDbStore, når databasen er klar).
-export function mountSettings({ store, target, version, openButton, gist = null, onWeight = null } = {}) {
+// container: tegn indstillingerne direkte i dette element (fanen Mere) i stedet for i en dialog. Så er der ingen dialog, og openButton er valgfri
+// (knapperne kalder blot open(), og aria-haspopup sættes ikke).
+// open() kalder i så fald onReveal({ focusWeight }), som skal vise containeren (app.js skifter til fanen Mere), og lægger derefter markøren i vægtfeltet, hvis det er bedt om.
+// → { open({ focusWeight }), close(), setStore(next), syncWeight(), dispose() }. open({ focusWeight: true }) åbner med markøren i vægtfeltet. setStore skifter Store (fx fra LocalStore til ArtifactDbStore, når databasen er klar).
+// syncWeight() henter vægten fra lageret igen (fx efter en ændring i en anden fane), uden at røre feltet mens man skriver i det.
+export function mountSettings({ store, target, version, openButton, gist = null, onWeight = null, container = null, onReveal = null } = {}) {
   const openers = [].concat(openButton || []).filter(Boolean);
-  if (!store || !openers.length || typeof document === 'undefined') return null;
+  const inline = !!container;
+  if (!store || (!openers.length && !inline) || typeof document === 'undefined') return null;
   const isSite = target === 'site';
   let framed = false;
   try { framed = window.top !== window.self; } catch { framed = true; }
 
-  const dlg = el('dialog', { class: 'sheet settings', 'aria-labelledby': 'setTitle', lang: 'da' });
-  document.body.append(dlg);
-  for (const b of openers) b.setAttribute('aria-haspopup', 'dialog');
+  const dlg = inline ? container : el('dialog', { class: 'sheet settings', 'aria-labelledby': 'setTitle', lang: 'da' });
+  if (!inline) document.body.append(dlg);
+  if (!inline) for (const b of openers) b.setAttribute('aria-haspopup', 'dialog');
   let refs = {};
   let blobUrl = null;
   let authShown = false; // om dialogen viser feltet til et nyt token (status 'auth')
@@ -208,14 +213,22 @@ export function mountSettings({ store, target, version, openButton, gist = null,
       el('div', { class: 'sh-actions left' }, imp), inMsg);
   }
 
+  // Vægtfeltet følger lageret (forudfyldt ved tegning, og igen via syncWeight). Et felt man er i gang med at skrive i røres ikke.
+  function syncWeight() {
+    if (!refs.weight || (document.activeElement === refs.weight && refs.weight.value !== '')) return;
+    let ls = null;
+    try { ls = localStorage; } catch { /* blokeret: så er vægten ukendt */ }
+    const current = readWeight(ls);
+    refs.weight.value = current === null ? '' : String(current).replace('.', ',');
+  }
+
   // Din vægt (kg): kun lokalt. Tom tekst fjerner den. Intet her rører Store'en.
   function weightSection() {
     let ls = null;
     try { ls = localStorage; } catch { /* blokeret: saveWeight melder det */ }
-    const current = readWeight(ls);
     const input = el('input', { type: 'text', id: 'setWeight', inputmode: 'decimal', autocomplete: 'off', maxlength: '6', placeholder: 'fx 70' });
-    input.value = current === null ? '' : String(current).replace('.', ',');
     refs.weight = input;
+    syncWeight();
     const msg = el('div', { class: 'msg', role: 'status' });
     const apply = () => {
       const r = saveWeight(ls, input.value);
@@ -247,42 +260,50 @@ export function mountSettings({ store, target, version, openButton, gist = null,
     else if (store.kind === 'local' && gist && isSite) body = connectSection();
     else if (store.kind === 'artifact') body = el('section', null, el('h4', null, 'Delt lager'), el('p', null, 'Dine pas gemmes af Claude-siden og følger din konto. Vil du i stedet bruge den installerede app med GitHub-synk, så eksportér her og importér i appen.'));
     else body = el('section', null, el('h4', null, 'Gemmes kun på denne enhed'), el('p', null, 'Her er der ingen synkronisering. Eksportér, hvis du vil tage din log med.'));
+    // I en fane har siden selv overskrift og versionslinje, så dialogens topbjælke og version udelades.
     dlg.replaceChildren(el('div', { class: 'sh set' },
-      el('div', { class: 'sh-top' }, el('div', null, el('div', { class: 'sh-sport' }, 'Indstillinger'), el('h3', { id: 'setTitle' }, 'Synkronisering')), close),
+      !inline && el('div', { class: 'sh-top' }, el('div', null, el('div', { class: 'sh-sport' }, 'Indstillinger'), el('h3', { id: 'setTitle' }, 'Synkronisering')), close),
       refs.status, refs.detail, body, weightSection(), transferSection(),
-      el('p', { class: 'ver' }, `Version ${version || ''}`)));
+      !inline && el('p', { class: 'ver' }, `Version ${version || ''}`)));
     paintStatus(s);
   }
 
   // focusWeight: "Angiv vægt"-linkene. Dialogen tegnes forfra, og markøren står i vægtfeltet (rullet frem), så man kan skrive med det samme.
   const open = ({ focusWeight = false } = {}) => {
-    render();
-    if (!dlg.open) dlg.showModal();
+    if (inline) {
+      if (onReveal) onReveal({ focusWeight }); // viser containeren (fanen Mere); først derefter kan feltet få fokus
+      syncWeight();
+    } else {
+      render();
+      if (!dlg.open) dlg.showModal();
+    }
     if (focusWeight && refs.weight) { refs.weight.scrollIntoView({ block: 'center' }); refs.weight.focus(); }
   };
   const onOpen = () => open();
   const onBackdrop = ev => { if (ev.target === dlg) dlg.close(); };
   const onClose = () => { if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; } };
   for (const b of openers) b.addEventListener('click', onOpen);
-  dlg.addEventListener('click', onBackdrop);
-  dlg.addEventListener('close', onClose);
+  if (!inline) { dlg.addEventListener('click', onBackdrop); dlg.addEventListener('close', onClose); }
   // Skifter status ind i eller ud af 'auth' mens dialogen er åben, tegnes den om, så feltet til et nyt token dukker op.
-  const onStatus = s => { if (!dlg.open) return; if ((s.state === 'auth') !== authShown) render(); else paintStatus(s); };
+  const onStatus = s => { if (!inline && !dlg.open) return; if ((s.state === 'auth') !== authShown) render(); else paintStatus(s); };
   let offStatus = store.onStatus(onStatus);
+  if (inline) render();
 
   return {
     open,
-    close: () => dlg.close(),
+    close: () => { if (!inline) dlg.close(); },
+    syncWeight,
     setStore(next) {
       if (!next || next === store) return;
       offStatus();
       store = next;
       offStatus = store.onStatus(onStatus);
-      if (dlg.open) render();
+      if (inline || dlg.open) render();
     },
     dispose() {
       offStatus();
       for (const b of openers) b.removeEventListener('click', onOpen);
+      if (inline) { onClose(); dlg.replaceChildren(); return; }
       dlg.removeEventListener('click', onBackdrop);
       dlg.removeEventListener('close', onClose);
       onClose();
