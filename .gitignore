@@ -9,3 +9,4 @@ cal-schedule.local.json
 dist/
 # Agent-worktrees og lokal Claude-konfiguration
 .claude/
+.Rhistory
